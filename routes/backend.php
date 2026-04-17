@@ -142,6 +142,7 @@ Route::group(['middleware' => 'adminLanguageSwitch'], function () {
 
         Route::resource('tax', 'Client\TaxCategoryController');
         Route::resource('taxRate', 'Client\TaxRateController');
+        Route::resource('distance-sla-rules', 'Client\DistanceSlaRuleController');
         Route::resource('addon', 'Client\AddonSetController');
         Route::resource('payment', 'Client\PaymentController');
         Route::resource('accounting', 'Client\AccountController');

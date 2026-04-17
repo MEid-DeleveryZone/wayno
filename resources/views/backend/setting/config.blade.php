@@ -948,6 +948,12 @@
                   </div>
                   <div class="col-md-6">
                      <div class="form-group mb-3">
+                        <label for="use_distance_based_sla" class="mr-2 mb-0">{{__('Enable distance-based SLA calculation')}}</label>
+                        <input type="checkbox" data-plugin="switchery" name="use_distance_based_sla" id="use_distance_based_sla" class="form-control" data-color="#43bee1" @if((isset($preference) && $preference->use_distance_based_sla == '1')) checked='checked' @endif>
+                     </div>
+                  </div>
+                  <div class="col-md-6">
+                     <div class="form-group mb-3">
                         <label for="android_maintenance_mode" class="mr-2 mb-0">{{__('Android Maintenance Mode')}}</label>
                         <input type="checkbox" data-plugin="switchery" name="android_maintenance_mode" id="android_maintenance_mode" class="form-control" data-color="#43bee1" @if((isset($preference) && $preference->android_maintenance_mode == '1')) checked='checked' @endif>
                      </div>
