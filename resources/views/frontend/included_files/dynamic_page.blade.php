@@ -1,0 +1,1 @@
+{!! $homePageLabel->translations->first()->body_html ?? '' !!}

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open App or Install</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 500px;
+        }
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn {
+            display: inline-block;
+            margin: 1rem 0.5rem;
+            padding: 1rem 2rem;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        #status {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Opening App...</h1>
+        <div class="loader"></div>
+        <p id="status">Attempting to open the app...</p>
+        <div id="fallback-buttons" style="display: none;">
+            <p>Don't have the app?</p>
+            <a href="#" id="install-btn" class="btn">Install Now</a>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - CUSTOMIZE THESE VALUES
+        const CONFIG = {
+            // Deep link schemes for your app
+            deepLink: {
+                ios: 'yourapp://',  // Your iOS app URL scheme
+                android: 'yourapp://',  // Your Android app URL scheme
+                // Optional: Universal/App Links (preferred method)
+                universal: 'https://yourapp.com/open'  // Your universal/app link
+            },
+            // App store URLs
+            appStore: {
+                ios: 'https://apps.apple.com/app/idYOUR_APP_ID',  // Your iOS App Store URL
+                android: 'https://play.google.com/store/apps/details?id=com.yourcompany.yourapp'  // Your Android Play Store URL
+            },
+            // Timeout before redirecting to store (milliseconds)
+            timeout: 2500,
+            // Use universal links (true) or custom URL schemes (false)
+            useUniversalLinks: false
+        };
+
+        // Device detection
+        function detectDevice() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            
+            // iOS detection
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                return 'ios';
+            }
+            
+            // Android detection
+            if (/android/i.test(userAgent)) {
+                return 'android';
+            }
+            
+            return 'unknown';
+        }
+
+        // Get the appropriate deep link
+        function getDeepLink(device) {
+            if (CONFIG.useUniversalLinks && CONFIG.deepLink.universal) {
+                return CONFIG.deepLink.universal;
+            }
+            return device === 'ios' ? CONFIG.deepLink.ios : CONFIG.deepLink.android;
+        }
+
+        // Get the appropriate app store link
+        function getStoreLink(device) {
+            return device === 'ios' ? CONFIG.appStore.ios : CONFIG.appStore.android;
+        }
+
+        // Main app redirect logic
+        function attemptAppRedirect() {
+            const device = detectDevice();
+            const statusEl = document.getElementById('status');
+            const fallbackButtons = document.getElementById('fallback-buttons');
+            const installBtn = document.getElementById('install-btn');
+
+            if (device === 'unknown') {
+                statusEl.textContent = 'This feature is only available on mobile devices.';
+                document.querySelector('.loader').style.display = 'none';
+                return;
+            }
+
+            const deepLink = getDeepLink(device);
+            const storeLink = getStoreLink(device);
+            
+            // Set up the install button
+            installBtn.href = storeLink;
+
+            // Track if app was opened
+            let appOpened = false;
+            let startTime = Date.now();
+
+            // Listen for visibility change (app opened successfully)
+            const visibilityHandler = () => {
+                if (document.hidden) {
+                    appOpened = true;
+                }
+            };
+            document.addEventListener('visibilitychange', visibilityHandler);
+
+            // Listen for page blur (app opened successfully)
+            const blurHandler = () => {
+                appOpened = true;
+            };
+            window.addEventListener('blur', blurHandler);
+
+            // Attempt to open the app
+            try {
+                if (CONFIG.useUniversalLinks) {
+                    // For universal links, just navigate
+                    window.location.href = deepLink;
+                } else {
+                    // For custom URL schemes
+                    if (device === 'ios') {
+                        // iOS: Try to open via iframe first (works better for custom schemes)
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = deepLink;
+                        document.body.appendChild(iframe);
+                        
+                        // Also try direct navigation as backup
+                        setTimeout(() => {
+                            window.location.href = deepLink;
+                        }, 100);
+                    } else {
+                        // Android: Direct navigation works well
+                        window.location.href = deepLink;
+                    }
+                }
+
+                statusEl.textContent = 'If the app doesn\'t open automatically, click the button below.';
+
+                // Set timeout to redirect to store if app didn't open
+                setTimeout(() => {
+                    if (!appOpened && !document.hidden) {
+                        // App didn't open, show install option
+                        statusEl.textContent = 'App not installed';
+                        document.querySelector('.loader').style.display = 'none';
+                        fallbackButtons.style.display = 'block';
+                        
+                        // Optional: Auto-redirect to store after showing message
+                        // setTimeout(() => {
+                        //     window.location.href = storeLink;
+                        // }, 1500);
+                    }
+                    
+                    // Clean up event listeners
+                    document.removeEventListener('visibilitychange', visibilityHandler);
+                    window.removeEventListener('blur', blurHandler);
+                }, CONFIG.timeout);
+
+            } catch (error) {
+                console.error('Error attempting to open app:', error);
+                statusEl.textContent = 'Unable to open app. Please install it from the store.';
+                document.querySelector('.loader').style.display = 'none';
+                fallbackButtons.style.display = 'block';
+            }
+        }
+
+        // Alternative: Redirect with query parameters
+        function attemptAppRedirectWithParams() {
+            // Get URL parameters to pass to the app
+            const params = new URLSearchParams(window.location.search);
+            const device = detectDevice();
+            
+            if (device === 'unknown') return;
+
+            let deepLink = getDeepLink(device);
+            
+            // Append parameters to deep link if any
+            if (params.toString()) {
+                const separator = deepLink.includes('?') ? '&' : '?';
+                deepLink += separator + params.toString();
+            }
+
+            // Use the same logic as above but with parameterized link
+            // ... (similar to attemptAppRedirect)
+        }
+
+        // Run on page load
+        window.addEventListener('load', () => {
+            // Small delay to ensure page is fully loaded
+            setTimeout(attemptAppRedirect, 100);
+        });
+
+        // Alternative: Trigger manually
+        // document.getElementById('open-app-btn').addEventListener('click', attemptAppRedirect);
+    </script>
+</body>
+</html>
+
+

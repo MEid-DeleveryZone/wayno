@@ -1,0 +1,4 @@
+Logo,Banner,Name,Description,Address,Dine_In,Takeaway,Delivery,Order_Prepare_Time (In minutes),"Auto_Reject_Time (In minutes, 0 for no rejection)",Order Min Amount,24*7 Availability,Commission Percent,Commission Fixed Per Order,Commission Monthly,24*7 Availability,Phone Number,Email
+,,KFC,,"Samadhan, 18 Sahar Road, Samadhan Agarkar Chowk, Andheri (e)",TRUE,TRUE,FALSE,12,2,100,TRUE,15,10,,TRUE,6565656565,kfc@mail.com
+,,Chayoos,,"1-11-251/19/8/2, Begumpet",FALSE,TRUE,TRUE,14,3,200,FALSE,25,12,,TRUE,5454545454,support@chayoos.com
+,,Pal Dhaba,,"Ss 4-233, Sec 2, Vashi, Navi Mumbai",TRUE,FALSE,FALSE,20,4,300,TRUE,15,13,,TRUE,7474747474,dhaba@yopmail.com

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="61px" height="61px" viewBox="0 0 61 61" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 64 (93537) - https://sketch.com -->
+    <title>back</title>
+    <desc>Created with Sketch.</desc>
+    <g id="web" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="back">
+            <circle id="Oval" fill-opacity="0.0835882867" fill="#000000" transform="translate(30.500000, 30.500000) scale(-1, 1) translate(-30.500000, -30.500000) " cx="30.5" cy="30.5" r="30.5"></circle>
+            <polyline id="Path-7" stroke="#979797" stroke-linecap="round" transform="translate(30.476074, 30.985596) scale(-1, 1) translate(-30.476074, -30.985596) " points="24.2033691 20.9433594 37.1777344 31.8027344 23.7744141 41.027832"></polyline>
+        </g>
+    </g>
+</svg>

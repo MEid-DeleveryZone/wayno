@@ -1,0 +1,56 @@
+// Fonts
+@import url('https://fonts.googleapis.com/css?family=Nunito');
+
+// Variables
+@import 'variables';
+
+// Bootstrap
+@import '~bootstrap/scss/bootstrap';
+
+/*
+@import '../js/assets/scss/hello123.scss';
+@import '../js/assets/scss/font-awesome.scss';
+
+@import '../js/assets/scss/font-awesome.scss';
+@import '../js/assets/scss/themify.scss';
+@import '../js/assets/scss/themify/_core.scss';
+@import '../js/assets/scss/themify/_extras.scss';
+@import '../js/assets/scss/themify/_icons.scss';
+@import '../js/assets/scss/themify/_mixins.scss';
+@import '../js/assets/scss/themify/_path.scss';
+@import '../js/assets/scss/themify/_themify-icons.scss';
+@import '../js/assets/scss/themify/_variables.scss';
+@import '../js/assets/scss/theme/_menu.scss';
+@import '../js/assets/scss/theme/_responsive.scss';
+@import '../js/assets/scss/theme/_style.scss';
+@import '../js/assets/scss/theme/_theme-dark.scss';
+@import '../js/assets/scss/theme/_variables.scss';
+@import '../js/assets/scss/font-awesome.scss';
+@import '../js/assets/scss/font-awesome/_animated.scss';
+@import '../js/assets/scss/font-awesome/_bordered-pulled.scss';
+@import '../js/assets/scss/font-awesome/_core.scss';
+@import '../js/assets/scss/font-awesome/_fixed-width.scss';
+@import '../js/assets/scss/font-awesome/_icons.scss';
+@import '../js/assets/scss/font-awesome/_larger.scss';
+@import '../js/assets/scss/font-awesome/_list.scss';
+@import '../js/assets/scss/font-awesome/_mixins.scss';
+@import '../js/assets/scss/font-awesome/_path.scss';
+@import '../js/assets/scss/font-awesome/_rotated-flipped.scss';
+@import '../js/assets/scss/font-awesome/_screen-reader.scss';
+@import '../js/assets/scss/font-awesome/_stacked.scss';
+@import '../js/assets/scss/font-awesome/_variables.scss';
+
+
+
+
+@import '~vue2-animate/dist/vue2-animate.min.css';
+@import '~vue-slider-component/dist-css/vue-slider-component.css';
+@import '~vue-image-lightbox/dist/vue-image-lightbox.min.css';*/
+
+:root {
+    --theme-deafult: #ff4c3b;
+    // This gradient color only for gym layout
+    --theme-gradient1: #01effc;
+    --theme-gradient2: #485ff2;
+}
+
