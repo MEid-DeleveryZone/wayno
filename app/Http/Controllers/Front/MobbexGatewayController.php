@@ -25,23 +25,34 @@ class MobbexGatewayController extends FrontController
     public function __construct()
     {
         $mobbex_creds = PaymentOption::select('credentials', 'test_mode')->where('code', 'mobbex')->where('status', 1)->first();
-        $creds_arr = json_decode($mobbex_creds->credentials);
-        $api_key = (isset($creds_arr->api_key)) ? $creds_arr->api_key : '';
-        $api_access_token = (isset($creds_arr->api_access_token)) ? $creds_arr->api_access_token : '';
-        $this->test_mode = (isset($mobbex_creds->test_mode) && ($mobbex_creds->test_mode == '1')) ? true : false;
+        $api_key = '';
+        $api_access_token = '';
+        $test_mode = false;
 
+        if ($mobbex_creds) {
+            $creds_arr = json_decode($mobbex_creds->credentials);
+            $api_key = isset($creds_arr->api_key) ? $creds_arr->api_key : '';
+            $api_access_token = isset($creds_arr->api_access_token) ? $creds_arr->api_access_token : '';
+            $test_mode = isset($mobbex_creds->test_mode) && $mobbex_creds->test_mode == '1';
+        }
+
+        $this->test_mode = $test_mode;
         $this->API_KEY = $api_key;
         $this->API_ACCESS_TOKEN = $api_access_token;
+        $this->mb = null;
 
         try {
-            $this->mb = new MB($api_key, $api_access_token);
-        } catch (Exception $ex) {
-            return $this->errorResponse($ex->getMessage(), $ex->getCode());
+            if (class_exists('MB')) {
+                $this->mb = new MB($api_key, $api_access_token);
+            }
+        } catch (\Exception $ex) {
+            $this->mb = null;
         }
     }
 
-    public function mobbexPurchase(Request $request){
-        try{
+    public function mobbexPurchase(Request $request)
+    {
+        try {
             $user = Auth::user();
             $cart = Cart::select('id')->where('status', '0')->where('user_id', $user->id)->first();
             $amount = $this->getDollarCompareAmount($request->amount);
@@ -54,10 +65,10 @@ class MobbexGatewayController extends FrontController
             //     $address_id = $request->address_id;
             //     $returnUrlParams = $returnUrlParams.'&address_id='.$address_id;
             // }
-            $returnUrlParams = '?gateway=mobbex&order='.$request->order_number;
+            $returnUrlParams = '?gateway=mobbex&order=' . $request->order_number;
 
             $returnUrl = route('order.return.success');
-            if($request->payment_form == 'wallet'){
+            if ($request->payment_form == 'wallet') {
                 $returnUrl = route('user.wallet');
             }
 
@@ -88,17 +99,14 @@ class MobbexGatewayController extends FrontController
                 )
             );
             $response = $this->mb->mobbex_checkout($checkout_data);
-            if($response['response']['result']){
+            if ($response['response']['result']) {
                 return $this->successResponse($response['response']['data']['url']);
-            }
-            elseif(!$response['response']['result']){
+            } elseif (!$response['response']['result']) {
                 return $this->errorResponse($response['response']['error'], 400);
-            }
-            else{
+            } else {
                 return $this->errorResponse($response->getMessage(), 400);
             }
-        }
-        catch(\Exception $ex){
+        } catch (\Exception $ex) {
             return $this->errorResponse($ex->getMessage(), 400);
         }
     }
@@ -111,17 +119,17 @@ class MobbexGatewayController extends FrontController
         // Log::info($request->all());
 
         $data = $request->data;
-        if($data['result'] == 'true'){
+        if ($data['result'] == 'true') {
             $payment_details = $data['payment'];
             $transactionId = $payment_details['id'];
             $order_number = $payment_details['reference'];
             $order = Order::with(['paymentOption', 'user_vendor', 'vendors:id,order_id,vendor_id'])->where('order_number', $order_number)->first();
-            if($order){
-                if($payment_details['status']['code'] == 200){
+            if ($order) {
+                if ($payment_details['status']['code'] == 200) {
                     $order->payment_status = 1;
                     $order->save();
                     $payment_exists = Payment::where('transaction_id', $transactionId)->first();
-                    if(!$payment_exists){
+                    if (!$payment_exists) {
                         Payment::insert([
                             'date' => date('Y-m-d'),
                             'order_id' => $order->id,
@@ -154,11 +162,11 @@ class MobbexGatewayController extends FrontController
                         $orderController->sendOrderPushNotificationVendors($super_admin, $vendor_order_detail);
 
                         // Send Email
-                     //   $this->successMail();
+                        //   $this->successMail();
                     }
-                }else{
+                } else {
                     $order_products = OrderProduct::select('id')->where('order_id', $order->id)->get();
-                    foreach($order_products as $order_prod){
+                    foreach ($order_products as $order_prod) {
                         OrderProductAddon::where('order_product_id', $order_prod->id)->delete();
                     }
                     OrderProduct::where('order_id', $order->id)->delete();
@@ -171,23 +179,27 @@ class MobbexGatewayController extends FrontController
                 }
             }
         }
-
     }
 
-    public function getTransactionDetails($transactionId){
-        
+    public function getTransactionDetails($transactionId)
+    {
+
         $url = "https://api.mobbex.com/2.0/transactions/status";
-        $payload =  [ "id" => $transactionId];
+        $payload =  ["id" => $transactionId];
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLINFO_HEADER_OUT, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-            'Content-Type: application/json',
-            'x-api-key: '. $this->API_KEY ,
-            'x-access-token: '. $this->API_ACCESS_TOKEN)
+        curl_setopt(
+            $ch,
+            CURLOPT_HTTPHEADER,
+            array(
+                'Content-Type: application/json',
+                'x-api-key: ' . $this->API_KEY,
+                'x-access-token: ' . $this->API_ACCESS_TOKEN
+            )
         );
         $result = curl_exec($ch);
         curl_close($ch);

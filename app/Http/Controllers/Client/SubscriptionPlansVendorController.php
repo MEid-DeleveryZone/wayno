@@ -31,7 +31,7 @@ class SubscriptionPlansVendorController extends BaseController
     public function __construct(request $request)
     {
         $preferences = ClientPreference::where(['id' => 1])->first();
-        if((isset($preferences->subscription_mode)) && ($preferences->subscription_mode == 0)){
+        if (!app()->runningInConsole() && isset($preferences->subscription_mode) && $preferences->subscription_mode == 0) {
             abort(404);
         }
     }
@@ -54,12 +54,12 @@ class SubscriptionPlansVendorController extends BaseController
         $active_vendors = Vendor::where('status', 1)->count();
         $subscribed_vendors_percentage = ($subscribed_vendors_count / $active_vendors) * 100;
         $subscribed_vendors_percentage = number_format($subscribed_vendors_percentage, 2);
-        if($sub_plans){
-            foreach($sub_plans as $plan){
+        if ($sub_plans) {
+            foreach ($sub_plans as $plan) {
                 $features = '';
-                if($plan->features->isNotEmpty()){
+                if ($plan->features->isNotEmpty()) {
                     $planFeaturesList = array();
-                    foreach($plan->features as $feature){
+                    foreach ($plan->features as $feature) {
                         $planFeaturesList[] = $feature->feature->title;
                     }
                     unset($plan->features);
@@ -68,7 +68,7 @@ class SubscriptionPlansVendorController extends BaseController
                 $plan->features = $features;
             }
         }
-        return view('backend/subscriptions/subscriptionPlansVendor')->with(['features'=>$featuresList, 'subscription_plans'=>$sub_plans, 'subscribed_vendors_count'=>$subscribed_vendors_count, 'subscribed_vendors_percentage'=>$subscribed_vendors_percentage, 'awaiting_approval_subscriptions_count'=>$awaiting_approval_subscriptions_count, 'rejected_subscriptions_count'=>$rejected_subscriptions_count, 'approved_subscriptions_count'=>$approved_subscriptions_count]);
+        return view('backend/subscriptions/subscriptionPlansVendor')->with(['features' => $featuresList, 'subscription_plans' => $sub_plans, 'subscribed_vendors_count' => $subscribed_vendors_count, 'subscribed_vendors_percentage' => $subscribed_vendors_percentage, 'awaiting_approval_subscriptions_count' => $awaiting_approval_subscriptions_count, 'rejected_subscriptions_count' => $rejected_subscriptions_count, 'approved_subscriptions_count' => $approved_subscriptions_count]);
     }
 
     /**
@@ -77,7 +77,7 @@ class SubscriptionPlansVendorController extends BaseController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function saveSubscriptionPlan(Request $request, $domain = '', $slug='')
+    public function saveSubscriptionPlan(Request $request, $domain = '', $slug = '')
     {
         $message = 'added';
         $rules = array(
@@ -87,9 +87,9 @@ class SubscriptionPlansVendorController extends BaseController
             // 'period' => 'required',
             // 'sort_order' => 'required'
         );
-        if(!empty($slug)){
+        if (!empty($slug)) {
             $plan = SubscriptionPlansVendor::where('slug', $slug)->firstOrFail();
-            $rules['title'] = $rules['title'].',id,'.$plan->id;
+            $rules['title'] = $rules['title'] . ',id,' . $plan->id;
             $message = 'updated';
         }
 
@@ -97,9 +97,9 @@ class SubscriptionPlansVendorController extends BaseController
         if ($validation->fails()) {
             return redirect()->back()->withInput()->withErrors($validation);
         }
-        if(!empty($slug)){
+        if (!empty($slug)) {
             $subFeatures = SubscriptionPlanFeaturesVendor::where('subscription_plan_id', $plan->id)->whereNotIn('feature_id', $request->features)->delete();
-        }else{
+        } else {
             $plan = new SubscriptionPlansVendor;
             $plan->slug = uniqid();
         }
@@ -112,18 +112,18 @@ class SubscriptionPlansVendorController extends BaseController
         $plan->on_request = ($request->has('on_request') && $request->on_request == 'on') ? 1 : 0;
         if ($request->hasFile('image')) {
             $file = $request->file('image');
-            $plan->image = Storage::disk('s3')->put($this->folderName, $file,'public');
+            $plan->image = Storage::disk('s3')->put($this->folderName, $file, 'public');
         }
-        if( ($request->has('description')) && (!empty($request->description)) ){
+        if (($request->has('description')) && (!empty($request->description))) {
             $plan->description = $request->description;
         }
         $plan->save();
         $planId = $plan->id;
-        if( ($request->has('features')) && (!empty($request->features)) ){
-            foreach($request->features as $key => $val){
-                if(!empty($slug)){
+        if (($request->has('features')) && (!empty($request->features))) {
+            foreach ($request->features as $key => $val) {
+                if (!empty($slug)) {
                     $subFeature = SubscriptionPlanFeaturesVendor::where('subscription_plan_id', $planId)->where('feature_id', $val)->first();
-                    if($subFeature){
+                    if ($subFeature) {
                         continue;
                     }
                 }
@@ -136,7 +136,7 @@ class SubscriptionPlansVendorController extends BaseController
                 SubscriptionPlanFeaturesVendor::insert($feature);
             }
         }
-        return redirect()->back()->with('success', 'Subscription has been '.$message.' successfully.');
+        return redirect()->back()->with('success', 'Subscription has been ' . $message . ' successfully.');
     }
 
     /**
@@ -145,17 +145,17 @@ class SubscriptionPlansVendorController extends BaseController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function editSubscriptionPlan(Request $request, $domain = '', $slug='')
+    public function editSubscriptionPlan(Request $request, $domain = '', $slug = '')
     {
         $plan = SubscriptionPlansVendor::where('slug', $slug)->firstOrFail();
         $planFeatures = SubscriptionPlanFeaturesVendor::select('feature_id')->where('subscription_plan_id', $plan->id)->get();
         $featuresList = SubscriptionFeaturesListVendor::where('status', 1)->get();
         $subPlanFeatures = array();
-        foreach($planFeatures as $feature){
+        foreach ($planFeatures as $feature) {
             $subPlanFeatures[] = $feature->feature_id;
         }
-        $returnHTML = view('backend.subscriptions.edit-subscriptionPlanVendor')->with(['features'=>$featuresList, 'plan' => $plan, 'subPlanFeatures'=>$subPlanFeatures])->render();
-        return response()->json(array('success' => true, 'html'=>$returnHTML));
+        $returnHTML = view('backend.subscriptions.edit-subscriptionPlanVendor')->with(['features' => $featuresList, 'plan' => $plan, 'subPlanFeatures' => $subPlanFeatures])->render();
+        return response()->json(array('success' => true, 'html' => $returnHTML));
     }
 
     /**
@@ -164,12 +164,12 @@ class SubscriptionPlansVendorController extends BaseController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function updateSubscriptionPlanStatus(Request $request, $domain = '', $slug='')
+    public function updateSubscriptionPlanStatus(Request $request, $domain = '', $slug = '')
     {
         $subscription = SubscriptionPlansVendor::where('slug', $slug)->firstOrFail();
         $subscription->status = $request->status;
         $subscription->save();
-        return response()->json(array('success' => true, 'message'=>'Subscription status has been updated.'));
+        return response()->json(array('success' => true, 'message' => 'Subscription status has been updated.'));
     }
 
     /**
@@ -178,12 +178,12 @@ class SubscriptionPlansVendorController extends BaseController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function updateSubscriptionPlanOnRequest(Request $request, $domain = '', $slug='')
+    public function updateSubscriptionPlanOnRequest(Request $request, $domain = '', $slug = '')
     {
         $subscription = SubscriptionPlansVendor::where('slug', $slug)->firstOrFail();
         $subscription->on_request = $request->on_request;
         $subscription->save();
-        return response()->json(array('success' => true, 'message'=>'Subscription on request status has been updated.'));
+        return response()->json(array('success' => true, 'message' => 'Subscription on request status has been updated.'));
     }
 
     /**
@@ -192,7 +192,7 @@ class SubscriptionPlansVendorController extends BaseController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function deleteSubscriptionPlan(Request $request, $domain = '', $slug='')
+    public function deleteSubscriptionPlan(Request $request, $domain = '', $slug = '')
     {
         try {
             $subscription = SubscriptionPlansVendor::where('slug', $slug)->firstOrFail();
@@ -202,5 +202,4 @@ class SubscriptionPlansVendorController extends BaseController
             return redirect()->back()->with('error', 'Subscription cannot be deleted.');
         }
     }
-
 }

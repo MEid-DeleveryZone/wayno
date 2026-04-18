@@ -32,11 +32,18 @@ class PaylinkGatewayController extends FrontController
     public function __construct()
     {
         $paylink_creds = PaymentOption::select('credentials', 'test_mode')->where('code', 'paylink')->where('status', 1)->first();
-        $creds_arr = json_decode($paylink_creds->credentials);
-        $api_key = (isset($creds_arr->api_key)) ? $creds_arr->api_key : '';
-        $api_secret_key = (isset($creds_arr->api_secret_key)) ? $creds_arr->api_secret_key : '';
-        $this->test_mode = (isset($paylink_creds->test_mode) && ($paylink_creds->test_mode == '1')) ? true : false;
+        $api_key = '';
+        $api_secret_key = '';
+        $test_mode = false;
 
+        if ($paylink_creds) {
+            $creds_arr = json_decode($paylink_creds->credentials);
+            $api_key = isset($creds_arr->api_key) ? $creds_arr->api_key : '';
+            $api_secret_key = isset($creds_arr->api_secret_key) ? $creds_arr->api_secret_key : '';
+            $test_mode = isset($paylink_creds->test_mode) && $paylink_creds->test_mode == '1';
+        }
+
+        $this->test_mode = $test_mode;
         $this->API_KEY = $api_key;
         $this->API_SECRET_KEY = $api_secret_key;
     }

@@ -22,9 +22,15 @@ class StripeGatewayController extends FrontController
     public function __construct()
     {
         $stripe_creds = PaymentOption::select('credentials', 'test_mode')->where('code', 'stripe')->where('status', 1)->first();
-        $creds_arr = json_decode($stripe_creds->credentials);
-        $api_key = (isset($creds_arr->api_key)) ? $creds_arr->api_key : '';
-        $testmode = (isset($stripe_creds->test_mode) && ($stripe_creds->test_mode == '1')) ? true : false;
+        $api_key = '';
+        $testmode = false;
+
+        if ($stripe_creds) {
+            $creds_arr = json_decode($stripe_creds->credentials);
+            $api_key = isset($creds_arr->api_key) ? $creds_arr->api_key : '';
+            $testmode = isset($stripe_creds->test_mode) && $stripe_creds->test_mode == '1';
+        }
+
         $this->gateway = Omnipay::create('Stripe');
         $this->gateway->setApiKey($api_key);
         $this->gateway->setTestMode($testmode); //set it to 'false' when go live
@@ -46,19 +52,19 @@ class StripeGatewayController extends FrontController
                 'amount' => $amount,
                 'metadata' => ['cart_id' => ($request->cart_id) ? $request->cart_id : 0],
                 'description' => 'This is a test purchase transaction.',
-            //     'name'=>Auth::user()->name,
-            //     'address' => [
-            //        'line1'       => '510 Townsend St',
-            //        'postal_code' => '98140',
-            //        'city'        => 'San Francisco',
-            //        'state'       => 'CA',
-            //        'country'     => 'US',
-            //    ],
+                //     'name'=>Auth::user()->name,
+                //     'address' => [
+                //        'line1'       => '510 Townsend St',
+                //        'postal_code' => '98140',
+                //        'city'        => 'San Francisco',
+                //        'state'       => 'CA',
+                //        'country'     => 'US',
+                //    ],
                 // 'name' => Auth::user()->name,
                 // 'address' => $address->address . ', ' . $address->state . ', ' . $address->country . ', ' . $address->pincode,
             ])->send();
             if ($response->isSuccessful()) {
-               // $this->successMail();
+                // $this->successMail();
                 return $this->successResponse($response->getData());
             }
             // elseif ($response->isRedirect()) {
@@ -119,7 +125,7 @@ class StripeGatewayController extends FrontController
                     'customerReference' => $customer_id
                 ])->send();
                 if ($purchaseResponse->isSuccessful()) {
-                  //  $this->successMail();
+                    //  $this->successMail();
                     return $this->successResponse($purchaseResponse->getData());
                 } else {
                     $this->failMail();

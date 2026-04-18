@@ -26,11 +26,19 @@ class PaypalGatewayController extends FrontController
     public function __construct()
     {
         $paypal_creds = PaymentOption::select('credentials', 'test_mode')->where('code', 'paypal')->where('status', 1)->first();
-        $creds_arr = json_decode($paypal_creds->credentials);
-        $username = (isset($creds_arr->username)) ? $creds_arr->username : '';
-        $password = (isset($creds_arr->password)) ? $creds_arr->password : '';
-        $signature = (isset($creds_arr->signature)) ? $creds_arr->signature : '';
-        $testmode = (isset($paypal_creds->test_mode) && ($paypal_creds->test_mode == '1')) ? true : false;
+        $username = '';
+        $password = '';
+        $signature = '';
+        $testmode = false;
+
+        if ($paypal_creds) {
+            $creds_arr = json_decode($paypal_creds->credentials);
+            $username = isset($creds_arr->username) ? $creds_arr->username : '';
+            $password = isset($creds_arr->password) ? $creds_arr->password : '';
+            $signature = isset($creds_arr->signature) ? $creds_arr->signature : '';
+            $testmode = isset($paypal_creds->test_mode) && $paypal_creds->test_mode == '1';
+        }
+
         $this->gateway = Omnipay::create('PayPal_Express');
         $this->gateway->setUsername($username);
         $this->gateway->setPassword($password);
@@ -83,9 +91,9 @@ class PaypalGatewayController extends FrontController
                 'amount'                => $amount,
                 'payer_id'              => $request->PayerID,
                 'transactionReference'  => $request->token,
-            //     'cancelUrl' =>  url($request->cancelUrl),
-            //     'returnUrl' => url($request->returnUrl . $returnUrlParams),
-             ));
+                //     'cancelUrl' =>  url($request->cancelUrl),
+                //     'returnUrl' => url($request->returnUrl . $returnUrlParams),
+            ));
             $response = $transaction->send();
             if ($response->isSuccessful()) {
                 // $this->successMail();

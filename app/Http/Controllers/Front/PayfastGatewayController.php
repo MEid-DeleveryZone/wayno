@@ -14,7 +14,7 @@ use App\Http\Traits\ApiResponser;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Controllers\Front\{FrontController, OrderController, WalletController};
 use App\Models\Client as CP;
-use App\Models\{PaymentOption, Client, ClientPreference, Order, OrderProduct, EmailTemplate, Cart, CartAddon, OrderProductPrescription, CartProduct, User, Product, OrderProductAddon, Payment, ClientCurrency, OrderVendor, UserAddress, Vendor, CartCoupon, CartProductPrescription, LoyaltyCard, NotificationTemplate, VendorOrderStatus,OrderTax, SubscriptionInvoicesUser, UserDevice, UserVendor};
+use App\Models\{PaymentOption, Client, ClientPreference, Order, OrderProduct, EmailTemplate, Cart, CartAddon, OrderProductPrescription, CartProduct, User, Product, OrderProductAddon, Payment, ClientCurrency, OrderVendor, UserAddress, Vendor, CartCoupon, CartProductPrescription, LoyaltyCard, NotificationTemplate, VendorOrderStatus, OrderTax, SubscriptionInvoicesUser, UserDevice, UserVendor};
 
 class PayfastGatewayController extends FrontController
 {
@@ -24,11 +24,19 @@ class PayfastGatewayController extends FrontController
     public function __construct()
     {
         $payfast_creds = PaymentOption::select('credentials', 'test_mode')->where('code', 'payfast')->where('status', 1)->first();
-        $creds_arr = json_decode($payfast_creds->credentials);
-        $merchant_id = (isset($creds_arr->merchant_id)) ? $creds_arr->merchant_id : '';
-        $merchant_key = (isset($creds_arr->merchant_key)) ? $creds_arr->merchant_key : '';
-        $passphrase = (isset($creds_arr->passphrase)) ? $creds_arr->passphrase : '';
-        $testmode = (isset($payfast_creds->test_mode) && ($payfast_creds->test_mode == '1')) ? true : false;
+        $merchant_id = '';
+        $merchant_key = '';
+        $passphrase = '';
+        $testmode = false;
+
+        if ($payfast_creds) {
+            $creds_arr = json_decode($payfast_creds->credentials);
+            $merchant_id = isset($creds_arr->merchant_id) ? $creds_arr->merchant_id : '';
+            $merchant_key = isset($creds_arr->merchant_key) ? $creds_arr->merchant_key : '';
+            $passphrase = isset($creds_arr->passphrase) ? $creds_arr->passphrase : '';
+            $testmode = isset($payfast_creds->test_mode) && $payfast_creds->test_mode == '1';
+        }
+
         $this->gateway = Omnipay::create('PayFast');
         $this->gateway->setMerchantId($merchant_id);
         $this->gateway->setMerchantKey($merchant_key);
@@ -37,42 +45,44 @@ class PayfastGatewayController extends FrontController
         // dd($this->gateway);
     }
 
-    function generateSignature($data, $passPhrase = null) {
+    function generateSignature($data, $passPhrase = null)
+    {
         // Create parameter string
         $pfOutput = '';
-        foreach( $data as $key => $val ) {
-            if($val !== '') {
-                $pfOutput .= $key .'='. urlencode( trim( $val ) ) .'&';
+        foreach ($data as $key => $val) {
+            if ($val !== '') {
+                $pfOutput .= $key . '=' . urlencode(trim($val)) . '&';
             }
         }
         // Remove last ampersand
-        $getString = substr( $pfOutput, 0, -1 );
-        if( ($passPhrase !== null) || ($passPhrase !== '') ) {
-            $getString .= '&passphrase='. urlencode( trim( $passPhrase ) );
+        $getString = substr($pfOutput, 0, -1);
+        if (($passPhrase !== null) || ($passPhrase !== '')) {
+            $getString .= '&passphrase=' . urlencode(trim($passPhrase));
         }
         // return $getString;
-        return md5( $getString );
+        return md5($getString);
     }
 
-    public function payfastPurchase(Request $request, $domain = ''){
-        try{
+    public function payfastPurchase(Request $request, $domain = '')
+    {
+        try {
             $user = Auth::user();
             $amount = $this->getDollarCompareAmount($request->amount);
-            $returnUrlParams = '?amount='.$amount;
+            $returnUrlParams = '?amount=' . $amount;
             $address_id = 0;
             $tip = 0;
-            if($request->has('tip')){
+            if ($request->has('tip')) {
                 $tip = $request->tip;
-                $returnUrlParams = $returnUrlParams.'&tip='.$tip;
+                $returnUrlParams = $returnUrlParams . '&tip=' . $tip;
             }
-            if( ($request->has('address_id')) && ($request->address_id > 0) ){
+            if (($request->has('address_id')) && ($request->address_id > 0)) {
                 $address_id = $request->address_id;
-                $returnUrlParams = $returnUrlParams.'&address_id='.$address_id;
+                $returnUrlParams = $returnUrlParams . '&address_id=' . $address_id;
             }
-            $returnUrlParams = $returnUrlParams.'&gateway=payfast';
+            $returnUrlParams = $returnUrlParams . '&gateway=payfast';
 
             $returnUrl = route('order.return.success');
-            if($request->payment_form == 'wallet'){
+            if ($request->payment_form == 'wallet') {
                 $returnUrl = route('user.wallet');
             }
 
@@ -102,19 +112,16 @@ class PayfastGatewayController extends FrontController
 
             if ($response->isSuccessful()) {
                 return $this->successResponse($response->getData());
-            }
-            elseif ($response->isRedirect()) {
+            } elseif ($response->isRedirect()) {
                 $data['formData'] = $request_arr;
                 $data['redirectUrl'] = $response->getRedirectUrl();
                 $this->failMail();
                 return $this->successResponse($data);
-            }
-            else {
+            } else {
                 $this->failMail();
                 return $this->errorResponse($response->getMessage(), 400);
             }
-        }
-        catch(\Exception $ex){
+        } catch (\Exception $ex) {
             $this->failMail();
             return $this->errorResponse($ex->getMessage(), 400);
         }
@@ -123,90 +130,87 @@ class PayfastGatewayController extends FrontController
     public function payfastNotify(Request $request, $domain = '')
     {
         // Notify PayFast that information has been received
-        header( 'HTTP/1.0 200 OK' );
+        header('HTTP/1.0 200 OK');
         flush();
 
         // Posted variables from ITN
         $pfData = $request;
         $pfData->payment_status = 'COMPLETE';
         //update db
-        switch( $pfData->payment_status )
-        {
-        case 'COMPLETE':
-            // If complete, update your application, email the buyer and process the transaction as paid
-            $pfData->request->add([
-                'user_id' => $pfData->custom_int1,
-                'payment_option_id' => $pfData->custom_int3,
-                'transaction_id' => $pfData->pf_payment_id
-            ]);
-            if($pfData->custom_str2 == 'cart'){
+        switch ($pfData->payment_status) {
+            case 'COMPLETE':
+                // If complete, update your application, email the buyer and process the transaction as paid
                 $pfData->request->add([
-                    'address_id' => $pfData->custom_int2,
-                    'tip' => $pfData->custom_str1,
+                    'user_id' => $pfData->custom_int1,
+                    'payment_option_id' => $pfData->custom_int3,
+                    'transaction_id' => $pfData->pf_payment_id
                 ]);
-                $order = new OrderController();
-                $placeOrder = $order->placeOrder($pfData);
-                $response = $placeOrder->getData();
-            }
-            elseif($pfData->custom_str2 == 'wallet'){
-                $pfData->request->add([
-                    'wallet_amount' => $pfData->amount_gross
-                ]);
-                $wallet = new WalletController();
-                $creditWallet = $wallet->creditWallet($pfData);
-                $response = $creditWallet->getData();
-            }
+                if ($pfData->custom_str2 == 'cart') {
+                    $pfData->request->add([
+                        'address_id' => $pfData->custom_int2,
+                        'tip' => $pfData->custom_str1,
+                    ]);
+                    $order = new OrderController();
+                    $placeOrder = $order->placeOrder($pfData);
+                    $response = $placeOrder->getData();
+                } elseif ($pfData->custom_str2 == 'wallet') {
+                    $pfData->request->add([
+                        'wallet_amount' => $pfData->amount_gross
+                    ]);
+                    $wallet = new WalletController();
+                    $creditWallet = $wallet->creditWallet($pfData);
+                    $response = $creditWallet->getData();
+                }
 
-            if($response->status == 'Success'){
-            //    $this->successMail();
-                return $this->successResponse($response->data, 'Payment completed successfully.', 200);
-            }else{
+                if ($response->status == 'Success') {
+                    //    $this->successMail();
+                    return $this->successResponse($response->data, 'Payment completed successfully.', 200);
+                } else {
+                    $this->failMail();
+                    return $this->errorResponse($response->message, 400);
+                }
+                break;
+            case 'FAILED':
                 $this->failMail();
-                return $this->errorResponse($response->message, 400);
-            }
-        break;
-        case 'FAILED':
-            $this->failMail();
-            // There was an error, update your application
-            return $this->errorResponse('Payment failed', 400);
-        break;
-        default:
-        $this->failMail();
-            // If unknown status, do nothing (safest course of action)
-            // return $this->errorResponse($response->getMessage(), 400);
-        break;
+                // There was an error, update your application
+                return $this->errorResponse('Payment failed', 400);
+                break;
+            default:
+                $this->failMail();
+                // If unknown status, do nothing (safest course of action)
+                // return $this->errorResponse($response->getMessage(), 400);
+                break;
         }
     }
 
     public function payfastNotifyApp(Request $request, $domain = '')
     {
         // Notify PayFast that information has been received
-        header( 'HTTP/1.0 200 OK' );
+        header('HTTP/1.0 200 OK');
         flush();
 
         // Posted variables from ITN
         $pfData = $request;
         $pfData->payment_status = 'COMPLETE';
         //update db
-        switch( $pfData->payment_status )
-        {
-        case 'COMPLETE':
-            // If complete, update your application, email the buyer and process the transaction as paid
-            $pfData->request->add([
-                'user_id' => $pfData->custom_int1,
-                'payment_option_id' => $pfData->custom_int3,
-                'transaction_id' => $pfData->pf_payment_id
-            ]);
-            if($pfData->custom_str2 == 'cart'){
-                $transactionId = $pfData->pf_payment_id;
-                $order_number = $pfData->custom_str3;
-                $order = Order::with(['paymentOption', 'user_vendor', 'vendors:id,order_id,vendor_id'])->where('order_number', $order_number)->first();
-                if($order){
-                    // if($payment_details['status']['code'] == 200){
+        switch ($pfData->payment_status) {
+            case 'COMPLETE':
+                // If complete, update your application, email the buyer and process the transaction as paid
+                $pfData->request->add([
+                    'user_id' => $pfData->custom_int1,
+                    'payment_option_id' => $pfData->custom_int3,
+                    'transaction_id' => $pfData->pf_payment_id
+                ]);
+                if ($pfData->custom_str2 == 'cart') {
+                    $transactionId = $pfData->pf_payment_id;
+                    $order_number = $pfData->custom_str3;
+                    $order = Order::with(['paymentOption', 'user_vendor', 'vendors:id,order_id,vendor_id'])->where('order_number', $order_number)->first();
+                    if ($order) {
+                        // if($payment_details['status']['code'] == 200){
                         $order->payment_status = 1;
                         $order->save();
                         $payment_exists = Payment::where('transaction_id', $transactionId)->first();
-                        if(!$payment_exists){
+                        if (!$payment_exists) {
                             Payment::insert([
                                 'date' => date('Y-m-d'),
                                 'order_id' => $order->id,
@@ -240,56 +244,55 @@ class PayfastGatewayController extends FrontController
                             $orderController->sendOrderPushNotificationVendors($super_admin, $vendor_order_detail);
 
                             // Send Email
-                        //    $this->successMail();
-                    //     }
-                    // }else{
+                            //    $this->successMail();
+                            //     }
+                            // }else{
+                        }
                     }
                 }
-            }
-            // elseif($pfData->custom_str2 == 'wallet'){
-            //     $pfData->request->add([
-            //         'wallet_amount' => $pfData->amount_gross
-            //     ]);
-            //     $wallet = new WalletController();
-            //     $creditWallet = $wallet->creditWallet($pfData);
-            //     $response = $creditWallet->getData();
-            // }
+                // elseif($pfData->custom_str2 == 'wallet'){
+                //     $pfData->request->add([
+                //         'wallet_amount' => $pfData->amount_gross
+                //     ]);
+                //     $wallet = new WalletController();
+                //     $creditWallet = $wallet->creditWallet($pfData);
+                //     $response = $creditWallet->getData();
+                // }
 
-            if($response->status == 'Success'){
-            //    $this->successMail();
-                return $this->successResponse($response->data, 'Payment completed successfully.', 200);
-            }else{
-                $this->failMail();
-                return $this->errorResponse($response->message, 400);
-            }
-        break;
-        case 'FAILED':
-
-            if($pfData->custom_str2 == 'cart'){
-                $order_number = $pfData->custom_str3;
-                $order = Order::with(['paymentOption', 'user_vendor', 'vendors:id,order_id,vendor_id'])->where('order_number', $order_number)->first();
-                $order_products = OrderProduct::select('id')->where('order_id', $order->id)->get();
-                foreach($order_products as $order_prod){
-                    OrderProductAddon::where('order_product_id', $order_prod->id)->delete();
+                if ($response->status == 'Success') {
+                    //    $this->successMail();
+                    return $this->successResponse($response->data, 'Payment completed successfully.', 200);
+                } else {
+                    $this->failMail();
+                    return $this->errorResponse($response->message, 400);
                 }
-                OrderProduct::where('order_id', $order->id)->delete();
-                OrderProductPrescription::where('order_id', $order->id)->delete();
-                VendorOrderStatus::where('order_id', $order->id)->delete();
-                OrderVendor::where('order_id', $order->id)->delete();
-                OrderTax::where('order_id', $order->id)->delete();
-                Order::where('id', $order->id)->delete();
-            }
+                break;
+            case 'FAILED':
 
-            $this->failMail();
-            // There was an error, update your application
-            return $this->errorResponse('Payment failed', 400);
-        break;
-        default:
-        $this->failMail();
-            // If unknown status, do nothing (safest course of action)
-            // return $this->errorResponse($response->getMessage(), 400);
-        break;
+                if ($pfData->custom_str2 == 'cart') {
+                    $order_number = $pfData->custom_str3;
+                    $order = Order::with(['paymentOption', 'user_vendor', 'vendors:id,order_id,vendor_id'])->where('order_number', $order_number)->first();
+                    $order_products = OrderProduct::select('id')->where('order_id', $order->id)->get();
+                    foreach ($order_products as $order_prod) {
+                        OrderProductAddon::where('order_product_id', $order_prod->id)->delete();
+                    }
+                    OrderProduct::where('order_id', $order->id)->delete();
+                    OrderProductPrescription::where('order_id', $order->id)->delete();
+                    VendorOrderStatus::where('order_id', $order->id)->delete();
+                    OrderVendor::where('order_id', $order->id)->delete();
+                    OrderTax::where('order_id', $order->id)->delete();
+                    Order::where('id', $order->id)->delete();
+                }
+
+                $this->failMail();
+                // There was an error, update your application
+                return $this->errorResponse('Payment failed', 400);
+                break;
+            default:
+                $this->failMail();
+                // If unknown status, do nothing (safest course of action)
+                // return $this->errorResponse($response->getMessage(), 400);
+                break;
         }
     }
-
 }
