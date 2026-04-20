@@ -120,7 +120,7 @@ class ClientPreferenceController extends BaseController
             $preference = new ClientPreference();
             $preference->client_code = $code;
         }
-        $keyShouldNot = array('dispacher_home_other_service_key_url', 'dispacher_home_other_service_key_code', 'dispacher_home_other_service_key', 'pickup_delivery_service_key_url', 'pickup_delivery_service_key_code', 'pickup_delivery_service_key', 'delivery_service_key_url', 'delivery_service_key_code', 'delivery_service_key', 'need_delivery_service', 'need_dispacher_home_other_service', 'need_dispacher_ride', 'Default_location_name', 'Default_latitude', 'Default_longitude', 'is_hyperlocal', '_token', 'social_login', 'send_to', 'languages', 'hyperlocals', 'currency_data', 'multiply_by', 'cuid', 'primary_language', 'primary_currency', 'currency_data', 'verify_config', 'custom_mods_config', 'distance_to_time_calc_config');
+        $keyShouldNot = array('dispacher_home_other_service_key_url', 'dispacher_home_other_service_key_code', 'dispacher_home_other_service_key', 'pickup_delivery_service_key_url', 'pickup_delivery_service_key_code', 'pickup_delivery_service_key', 'delivery_service_key_url', 'delivery_service_key_code', 'delivery_service_key', 'need_delivery_service', 'need_dispacher_home_other_service', 'need_dispacher_ride', 'Default_location_name', 'Default_latitude', 'Default_longitude', 'is_hyperlocal', '_token', 'social_login', 'send_to', 'languages', 'hyperlocals', 'currency_data', 'multiply_by', 'cuid', 'primary_language', 'primary_currency', 'currency_data', 'verify_config', 'custom_mods_config', 'distance_to_time_calc_config', 'use_distance_based_sla');
 
         foreach ($request->all() as $key => $value) {
             if (!in_array($key, $keyShouldNot)) {
@@ -181,6 +181,7 @@ class ClientPreferenceController extends BaseController
             $preference->ios_maintenance_mode = ($request->has('ios_maintenance_mode') && $request->ios_maintenance_mode == 'on') ? 1 : 0;
             $preference->android_app_force_update_status = ($request->has('android_app_force_update_status') && $request->android_app_force_update_status == 'on') ? 1 : 0;
             $preference->ios_app_force_update_status = ($request->has('ios_app_force_update_status') && $request->ios_app_force_update_status == 'on') ? 1 : 0;
+            $preference->use_distance_based_sla = ($request->has('use_distance_based_sla') && $request->use_distance_based_sla == 'on') ? 1 : 0;
         }
         if ($request->has('distance_to_time_calc_config') && $request->distance_to_time_calc_config == '1') {
             $preference->distance_unit_for_time = (($request->has('distance_unit_for_time')) && ($request->distance_unit_for_time != '')) ? $request->distance_unit_for_time : 'kilometer';

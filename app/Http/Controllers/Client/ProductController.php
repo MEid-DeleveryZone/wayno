@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Session;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use App\Models\{CsvProductImport, Product, Category, ProductTranslation, Vendor, AddonSet, ProductRelated, ProductCrossSell, ProductAddon, ProductCategory, ClientLanguage, ProductVariant, ProductImage, TaxCategory, ProductVariantSet, Country, Variant, VendorMedia, ProductVariantImage, Brand, Celebrity, ClientPreference, ProductCelebrity, Type, ProductUpSell, CartProduct, CartAddon, UserWishlist};
 use Illuminate\Support\Facades\Storage;
 use App\Http\Traits\ToasterResponser;
@@ -201,7 +202,7 @@ class ProductController extends BaseController
             }
         }
         $otherProducts = Product::with('primary')->select('id', 'sku')->where('is_live', 1)->where('id', '!=', $product->id)->where('vendor_id', $product->vendor_id)->get();
-        $configData = ClientPreference::select('celebrity_check', 'pharmacy_check', 'need_dispacher_ride', 'need_delivery_service', 'enquire_mode', 'need_dispacher_home_other_service')->first();
+        $configData = ClientPreference::select('celebrity_check', 'pharmacy_check', 'need_dispacher_ride', 'need_delivery_service', 'enquire_mode', 'need_dispacher_home_other_service', 'use_distance_based_sla')->first();
         $celebrities = Celebrity::select('id', 'name')->where('status', '!=', 3)->get();
 
         $agent_dispatcher_tags = [];
@@ -232,10 +233,14 @@ class ProductController extends BaseController
     public function update(Request $request, $domain = '', $id)
     {
         $product = Product::where('id', $id)->firstOrFail();
+        $request->merge([
+            'distance_sla_group_id' => $request->filled('distance_sla_group_id') ? $request->distance_sla_group_id : null,
+        ]);
         $rule = array(
             'product_name' => 'required|string',
             'sku' => 'required|unique:products,sku,' . $product->id,
             'url_slug' => 'required|unique:products,url_slug,' . $product->id,
+            'distance_sla_group_id' => ['nullable', Rule::exists('distance_sla_groups', 'id')->where('is_active', 1)],
         );
         $validation  = Validator::make($request->all(), $rule);
         if ($validation->fails()) {
@@ -288,6 +293,7 @@ class ProductController extends BaseController
         $product->same_emirate_frequency = $request->same_emirate_frequency;
         $product->sla_diff_emirates      = $request->sla_diff_emirates;
         $product->diff_emirate_frequency = $request->diff_emirate_frequency;
+        $product->distance_sla_group_id = $request->distance_sla_group_id;
         if (empty($product->publish_at)) {
             $product->publish_at = ($request->is_live == 1) ? date('Y-m-d H:i:s') : '';
         }

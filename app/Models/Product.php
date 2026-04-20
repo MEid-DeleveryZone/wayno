@@ -10,7 +10,7 @@ class Product extends Model
 {
    use SoftDeletes;
 
-   protected $fillable = ['sku', 'title', 'url_slug', 'description', 'body_html', 'vendor_id', 'category_id', 'type_id', 'country_origin_id', 'is_new', 'is_featured', 'is_live', 'is_physical', 'weight', 'weight_unit', 'has_inventory', 'sell_when_out_of_stock', 'requires_shipping', 'Requires_last_mile', 'publish_at', 'inquiry_only', 'has_variant', 'averageRating', 'tags', 'pharmacy_check', 'deleted_at', 'celebrity_id', 'brand_id', 'tax_category_id', 'need_price_from_dispatcher', 'mode_of_service', 'returnable', 'same_emirate_frequency', 'diff_emirate_frequency'];
+   protected $fillable = ['sku', 'title', 'url_slug', 'description', 'body_html', 'vendor_id', 'category_id', 'type_id', 'country_origin_id', 'is_new', 'is_featured', 'is_live', 'is_physical', 'weight', 'weight_unit', 'has_inventory', 'sell_when_out_of_stock', 'requires_shipping', 'Requires_last_mile', 'publish_at', 'inquiry_only', 'has_variant', 'averageRating', 'tags', 'pharmacy_check', 'deleted_at', 'celebrity_id', 'brand_id', 'tax_category_id', 'need_price_from_dispatcher', 'mode_of_service', 'returnable', 'same_emirate_frequency', 'diff_emirate_frequency', 'distance_sla_group_id'];
 
    protected $appends = ['vendor_name', 'isReturnable'];
 
@@ -143,6 +143,14 @@ class Product extends Model
    public function taxCategory()
    {
       return $this->belongsTo('App\Models\TaxCategory', 'tax_category_id', 'id')->select('id', 'title', 'code');
+   }
+
+   public function distanceSlaGroup()
+   {
+      return $this->belongsTo(DistanceSlaGroup::class, 'distance_sla_group_id')
+         ->withDefault(function () {
+            return DistanceSlaGroup::where('is_default', true)->first() ?? new DistanceSlaGroup();
+         });
    }
 
    public function getVendorNameAttribute()
