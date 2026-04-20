@@ -17,12 +17,14 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Twilio\Rest\Client as TwilioClient;
 use App\Models\{Client, Category, Product, ClientPreference, ClientCurrency, Wallet, UserLoyaltyPoint, LoyaltyCard, Order, Nomenclature, VendorCategory};
+use App\Http\Traits\DistanceCalculationTrait;
 use App\Http\Traits\SendsEmails;
 use Illuminate\Support\Facades\Log;
 
 class BaseController extends Controller
 {
     use SendsEmails;
+    use DistanceCalculationTrait;
     
     private $field_status = 2;
     protected function sendSmsOld($provider, $sms_key, $sms_secret, $sms_from, $to, $body)
@@ -461,29 +463,6 @@ class BaseController extends Controller
             Wallet::insert($walletData);
         }
         return 1;
-    }
-
-    // Find distance between two lat long points
-    function calulateDistanceLineOfSight($lat1, $lon1, $lat2, $lon2, $unit)
-    {
-        if (($lat1 == $lat2) && ($lon1 == $lon2)) {
-            return 0;
-        } else {
-            $theta = $lon1 - $lon2;
-            $dist = sin(deg2rad($lat1)) * sin(deg2rad($lat2)) +  cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * cos(deg2rad($theta));
-            $dist = acos($dist);
-            $dist = rad2deg($dist);
-            $miles = $dist * 60 * 1.1515;
-            $unit = strtolower($unit);
-
-            if ($unit == "kilometer") {
-                return ($miles * 1.609344);
-            } else if ($unit == "nautical mile") {
-                return ($miles * 0.8684);
-            } else {
-                return $miles;
-            }
-        }
     }
 
     public function formattedOrderETA($minutes, $order_vendor_created_at, $scheduleTime = '')

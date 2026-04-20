@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Client\OrderController as ClientOrderController;
+use App\Services\SlaCalculationService;
 
 class PickupDeliveryController extends BaseController
 {
@@ -1245,6 +1246,36 @@ class PickupDeliveryController extends BaseController
                     $estimated_time = date('Y-m-d H:i:s', $estimated_time); // Format as datetime
                 } else {
                     $estimated_time = null; // Handle as needed if calculation failed
+                }
+            }
+
+            if (!empty($estimated_time) && is_array($request->tasks) && count($request->tasks) > 0) {
+                try {
+                    $tasks = collect($request->tasks);
+                    $pickupTask = $tasks->firstWhere('task_type_id', 1) ?? $tasks->first();
+                    $dropoffTask = $tasks->firstWhere('task_type_id', 2) ?? $tasks->slice(1)->first() ?? $tasks->last();
+
+                    if (!empty($pickupTask['latitude']) && !empty($pickupTask['longitude']) && !empty($dropoffTask['latitude']) && !empty($dropoffTask['longitude'])) {
+                        $clientCode = Client::query()->value('code');
+                        $hasRider = (bool)($request->has_rider ?? false);
+
+                        $calculatedEta = app(SlaCalculationService::class)->calculate([
+                            'vendor_id' => (int)$request->vendor_id,
+                            'pickup_lat' => (float)$pickupTask['latitude'],
+                            'pickup_lng' => (float)$pickupTask['longitude'],
+                            'dropoff_lat' => (float)$dropoffTask['latitude'],
+                            'dropoff_lng' => (float)$dropoffTask['longitude'],
+                            'eta' => Carbon::parse($estimated_time),
+                            'has_rider' => $hasRider,
+                            'client_code' => $clientCode,
+                        ]);
+
+                        $estimated_time = $calculatedEta->format('Y-m-d H:i:s');
+                    }
+                } catch (\Throwable $th) {
+                    Log::warning('Distance-based SLA fallback to existing ETA: ' . $th->getMessage(), [
+                        'vendor_id' => $request->vendor_id ?? null,
+                    ]);
                 }
             }
 
