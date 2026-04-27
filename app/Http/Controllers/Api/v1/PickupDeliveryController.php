@@ -1171,7 +1171,7 @@ class PickupDeliveryController extends BaseController
         ]);
     }
 
-    private function computeLegacySameEmirateSla(int $scheduleTime, int $sla, string $frequency): ?string
+    private function computeLegacySameEmirateSla(int $scheduleTime, int $sla, string $frequency): ?int
     {
         if ($frequency == 'days') {
             $estimatedTime = strtotime("+{$sla} days", $scheduleTime);
@@ -1181,16 +1181,32 @@ class PickupDeliveryController extends BaseController
         }
 
         if ($frequency == 'hours') {
-            $estimatedTime = strtotime("+{$sla} hours", $scheduleTime);
+            return strtotime("+{$sla} hours", $scheduleTime);
         }
 
         return null;
     }
 
-    private function resolveDistanceSlaGroupId($productDistanceSlaGroupId, bool $clientUsesDistanceBasedSla): ?int
+    private function resolveDiffEmirateSlaTimestamp(Product $ProductData, int $scheduleTime): ?int
+    {
+        if ($ProductData->diff_emirate_frequency == 'days') {
+            $estimated_time = strtotime("+{$ProductData->sla_diff_emirates} days", $scheduleTime);
+            // Set time to 8 PM only if the frequency is 'days'
+            $final_estimated_time = date('Y-m-d 20:00:00', $estimated_time);
+            $estimated_time = strtotime($final_estimated_time); // Recalculate as timestamp
+        }
+
+        if ($ProductData->diff_emirate_frequency == 'hours') {
+            return strtotime("+{$ProductData->sla_diff_emirates} hours", $scheduleTime);
+        }
+
+        return null;
+    }
+
+    private function resolveDistanceSlaGroupId(?int $productDistanceSlaGroupId, bool $clientUsesDistanceBasedSla): ?int
     {
         if (!empty($productDistanceSlaGroupId)) {
-            return (int) $productDistanceSlaGroupId;
+            return $productDistanceSlaGroupId;
         }
 
         if (!$clientUsesDistanceBasedSla) {
@@ -1200,8 +1216,8 @@ class PickupDeliveryController extends BaseController
         $defaultGroup = DistanceSlaGroup::query()
             ->default()
             ->where('is_active', true)
-            ->first()
-            ?? DistanceSlaGroup::query()->default()->first();
+            ->orderByDesc('is_active')
+            ->first();
 
         return $defaultGroup ? (int) $defaultGroup->id : null;
     }
@@ -1240,9 +1256,9 @@ class PickupDeliveryController extends BaseController
 
         $rule = $canUseDistanceRule
             ? DistanceSlaRule::where('distance_sla_group_id', $groupId)
-                ->where('distance_from', '<=', $distanceKm)
-                ->where('distance_to', '>=', $distanceKm)
-                ->first()
+            ->where('distance_from', '<=', $distanceKm)
+            ->where('distance_to', '>=', $distanceKm)
+            ->first()
             : null;
 
         if (!$rule) {
@@ -1276,15 +1292,19 @@ class PickupDeliveryController extends BaseController
     public function insertDeliveryCart(Request $request)
     {
         $request->validate([
-            'amount'            => 'required',
-            'payment_option_id' => 'required',
-            'vendor_id'         => 'required',
-            'product_id'        => 'required',
-            'currency_id'       => 'required',
-            'is_same_emirate'   => 'required',
-            'tasks'             => 'required',
-            'category_id'       => 'required',
-            'client_comment'    => 'nullable|string',
+            'amount'               => 'required',
+            'payment_option_id'    => 'required',
+            'vendor_id'            => 'required',
+            'product_id'           => 'required',
+            'currency_id'          => 'required',
+            'is_same_emirate'      => 'required',
+            'tasks'                => 'required|array|min:1',
+            'tasks.*.latitude'     => 'required|numeric|between:-90,90',
+            'tasks.*.longitude'    => 'required|numeric|between:-180,180',
+            'tasks.*.task_type_id' => 'required|integer',
+            'tasks.*.address'      => 'required|string',
+            'category_id'          => 'required',
+            'client_comment'       => 'nullable|string',
         ]);
         $paymentOptionDetails = [];
         $user              = Auth::user();
@@ -1341,19 +1361,18 @@ class PickupDeliveryController extends BaseController
                             $ProductData->distance_sla_group_id,
                             (bool) ($client_preference->use_distance_based_sla ?? false)
                         );
-                        $categoryFlags = Category::select('is_pickup_enabled', 'is_dropoff_enabled')
-                            ->find($request->category_id);
-                        $isPickupEnabled = (bool) ($categoryFlags->is_pickup_enabled ?? false);
-                        $isDropoffEnabled = (bool) ($categoryFlags->is_dropoff_enabled ?? false);
 
                         if ($resolvedDistanceSlaGroupId !== null) {
+                            $category = Category::select('is_pickup_enabled', 'is_dropoff_enabled')
+                                ->find($request->category_id);
+
                             $estimated_time = $this->computeDistanceBasedSla(
                                 $request->tasks ?? [],
                                 $resolvedDistanceSlaGroupId,
                                 (int) $scheduleTime,
                                 $riderWaitingTime,
-                                $isPickupEnabled,
-                                $isDropoffEnabled
+                                (bool) ($category->is_pickup_enabled ?? false),
+                                (bool) ($category->is_dropoff_enabled ?? false)
                             );
                         } else {
                             $estimated_time = $this->computeLegacySameEmirateSla(
@@ -1362,19 +1381,8 @@ class PickupDeliveryController extends BaseController
                                 (string) ($ProductData->same_emirate_frequency ?? '')
                             );
                         }
-                    } else { // If the order is for different emirates
-
-                        // If the frequency is in days, add SLA days to the schedule time
-                        if ($ProductData->diff_emirate_frequency == 'days') {
-                            $estimated_time = strtotime("+{$ProductData->sla_diff_emirates} days", $scheduleTime);
-                            // Set time to 8 PM only if the frequency is 'days'
-                            $final_estimated_time = date('Y-m-d 20:00:00', $estimated_time);
-                            $estimated_time = strtotime($final_estimated_time); // Recalculate as timestamp
-                        }
-                        // If the frequency is in hours, add SLA hours to the schedule time
-                        else if ($ProductData->diff_emirate_frequency == 'hours') {
-                            $estimated_time = strtotime("+{$ProductData->sla_diff_emirates} hours", $scheduleTime);
-                        }
+                    } else {
+                        $estimated_time = $this->resolveDiffEmirateSlaTimestamp($ProductData, (int) $scheduleTime);
                     }
                 }
 
