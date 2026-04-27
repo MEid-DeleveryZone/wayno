@@ -1206,7 +1206,7 @@ class PickupDeliveryController extends BaseController
         return $defaultGroup ? (int) $defaultGroup->id : null;
     }
 
-    private function computeDistanceBasedSla(array $tasks, int $groupId, int $scheduleTime, ?array $riderWaitingTime): ?int
+    private function computeDistanceBasedSla(array $tasks, int $groupId, int $scheduleTime, ?array $riderWaitingTime, bool $isPickupEnabled, bool $isDropoffEnabled): ?int
     {
         $riderWaitingTime ??= ['waiting_time_minutes' => 0];
 
@@ -1236,11 +1236,13 @@ class PickupDeliveryController extends BaseController
             (float)$dropoffTask['longitude']
         );
 
-        $rule = ($distanceKm > 0)
+        $canUseDistanceRule = $distanceKm > 0 && $isPickupEnabled && $isDropoffEnabled;
+
+        $rule = $canUseDistanceRule
             ? DistanceSlaRule::where('distance_sla_group_id', $groupId)
-            ->where('distance_from', '<=', $distanceKm)
-            ->where('distance_to', '>=', $distanceKm)
-            ->first()
+                ->where('distance_from', '<=', $distanceKm)
+                ->where('distance_to', '>=', $distanceKm)
+                ->first()
             : null;
 
         if (!$rule) {
@@ -1339,13 +1341,19 @@ class PickupDeliveryController extends BaseController
                             $ProductData->distance_sla_group_id,
                             (bool) ($client_preference->use_distance_based_sla ?? false)
                         );
+                        $categoryFlags = Category::select('is_pickup_enabled', 'is_dropoff_enabled')
+                            ->find($request->category_id);
+                        $isPickupEnabled = (bool) ($categoryFlags->is_pickup_enabled ?? false);
+                        $isDropoffEnabled = (bool) ($categoryFlags->is_dropoff_enabled ?? false);
 
                         if ($resolvedDistanceSlaGroupId !== null) {
                             $estimated_time = $this->computeDistanceBasedSla(
                                 $request->tasks ?? [],
                                 $resolvedDistanceSlaGroupId,
                                 (int) $scheduleTime,
-                                $riderWaitingTime
+                                $riderWaitingTime,
+                                $isPickupEnabled,
+                                $isDropoffEnabled
                             );
                         } else {
                             $estimated_time = $this->computeLegacySameEmirateSla(
