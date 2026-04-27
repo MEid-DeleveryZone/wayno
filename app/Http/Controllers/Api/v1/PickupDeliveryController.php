@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Intervention\Image\Facades\Image;
 use App\Http\Controllers\Api\v1\BaseController;
 use App\Http\Requests\OrderProductRatingRequest;
-use App\Models\{VendorCategory, Category, ClientPreference, ClientCurrency, Vendor, ProductVariantSet, Product, LoyaltyCard, UserAddress, Order, OrderVendor, OrderProduct, VendorOrderStatus, Client, ClientLanguage, DeliveryCart, DeliveryCartImage, DeliveryCartTasks, Promocode, PromoCodeDetail, VendorOrderDispatcherStatus, Payment, serviceArea, PaymentOption, ItemCategory, OrderRejectingReason};
+use App\Models\{VendorCategory, Category, ClientPreference, ClientCurrency, Vendor, ProductVariantSet, Product, LoyaltyCard, UserAddress, Order, OrderVendor, OrderProduct, VendorOrderStatus, Client, ClientLanguage, DeliveryCart, DeliveryCartImage, DeliveryCartTasks, Promocode, PromoCodeDetail, VendorOrderDispatcherStatus, Payment, serviceArea, PaymentOption, ItemCategory, OrderRejectingReason, DistanceSlaRule, DistanceSlaGroup};
 use App\Http\Traits\ApiResponser;
 use Exception;
 use GuzzleHttp\Client as GCLIENT;
@@ -714,7 +714,7 @@ class PickupDeliveryController extends BaseController
                 $orderMain->sendSuccessEmail($request, $order);
 
                 //sendAdminPanelPusherNotification();
-                
+
                 // Send push notification for order creation with 5 seconds delay using queue
                 dispatch(new \App\Jobs\SendPushNotificationJob([$user->id], $order->id, $order->order_number, 1, $vendor_id))
                     ->delay(now()->addSeconds(5))->onConnection('database');
@@ -1171,6 +1171,106 @@ class PickupDeliveryController extends BaseController
         ]);
     }
 
+    private function computeLegacySameEmirateSla(int $scheduleTime, int $sla, string $frequency): ?string
+    {
+        if ($frequency == 'days') {
+            $estimatedTime = strtotime("+{$sla} days", $scheduleTime);
+            // Set time to 8 PM only if the frequency is 'days'
+            $finalEstimatedTime = date('Y-m-d 20:00:00', $estimatedTime);
+            return strtotime($finalEstimatedTime); // Recalculate as timestamp
+        }
+
+        if ($frequency == 'hours') {
+            $estimatedTime = strtotime("+{$sla} hours", $scheduleTime);
+        }
+
+        return null;
+    }
+
+    private function resolveDistanceSlaGroupId($productDistanceSlaGroupId, bool $clientUsesDistanceBasedSla): ?int
+    {
+        if (!empty($productDistanceSlaGroupId)) {
+            return (int) $productDistanceSlaGroupId;
+        }
+
+        if (!$clientUsesDistanceBasedSla) {
+            return null;
+        }
+
+        $defaultGroup = DistanceSlaGroup::query()
+            ->default()
+            ->where('is_active', true)
+            ->first()
+            ?? DistanceSlaGroup::query()->default()->first();
+
+        return $defaultGroup ? (int) $defaultGroup->id : null;
+    }
+
+    private function computeDistanceBasedSla(array $tasks, int $groupId, int $scheduleTime, ?array $riderWaitingTime): ?int
+    {
+        $riderWaitingTime ??= ['waiting_time_minutes' => 0];
+
+        $pickupTask = null;
+        $dropoffTask = null;
+
+        foreach ($tasks as $task) {
+            $taskTypeId = (int)($task['task_type_id'] ?? 0);
+            if ($taskTypeId === 1 && $pickupTask === null) {
+                $pickupTask = $task;
+            } elseif ($taskTypeId === 2 && $dropoffTask === null) {
+                $dropoffTask = $task;
+            }
+        }
+
+        if (
+            empty($pickupTask['latitude']) || empty($pickupTask['longitude']) ||
+            empty($dropoffTask['latitude']) || empty($dropoffTask['longitude'])
+        ) {
+            return null;
+        }
+
+        $distanceKm = $this->haversineDistance(
+            (float)$pickupTask['latitude'],
+            (float)$pickupTask['longitude'],
+            (float)$dropoffTask['latitude'],
+            (float)$dropoffTask['longitude']
+        );
+
+        $rule = ($distanceKm > 0)
+            ? DistanceSlaRule::where('distance_sla_group_id', $groupId)
+            ->where('distance_from', '<=', $distanceKm)
+            ->where('distance_to', '>=', $distanceKm)
+            ->first()
+            : null;
+
+        if (!$rule) {
+            $totalMinutes = (int)($riderWaitingTime['waiting_time_minutes'] ?? 0);
+            return strtotime("+{$totalMinutes} minutes", $scheduleTime);
+        }
+
+        $hasAssignedRider = !empty($riderWaitingTime['rider_name']);
+        $slaMinutes = $hasAssignedRider ? (int)$rule->time_with_rider : (int)$rule->time_without_rider;
+
+        $totalMinutes = $slaMinutes + ($riderWaitingTime['waiting_time_minutes'] ?? 0);
+
+        return strtotime("+{$totalMinutes} minutes", $scheduleTime);
+    }
+
+    private function haversineDistance(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadius = 6371;
+        $latDelta = deg2rad($lat2 - $lat1);
+        $lngDelta = deg2rad($lng2 - $lng1);
+
+        $a = sin($latDelta / 2) * sin($latDelta / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($lngDelta / 2) * sin($lngDelta / 2);
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
+    }
+
+
     public function insertDeliveryCart(Request $request)
     {
         $request->validate([
@@ -1207,37 +1307,66 @@ class PickupDeliveryController extends BaseController
             }
             //calculare ETA
             $estimated_time = '';
-            $ProductData = Product::select('sla_same_emirates', 'same_emirate_frequency', 'sla_diff_emirates', 'diff_emirate_frequency')
+            $resolvedDistanceSlaGroupId = null;
+
+            // Get rider waiting time (ETA to reach pickup) from dispatcher using pickup location
+            $riderWaitingTime = null;
+            if (!empty($request->tasks[0]['latitude']) && !empty($request->tasks[0]['longitude'])) {
+                $riderWaitingTime = $this->getRiderWaitingTimeFromDispatcher(
+                    $request->tasks[0]['latitude'],
+                    $request->tasks[0]['longitude'],
+                    $request->vendor_id
+                );
+            }
+
+            $ProductData = Product::select('sla_same_emirates', 'same_emirate_frequency', 'sla_diff_emirates', 'diff_emirate_frequency', 'distance_sla_group_id')
                 ->find($request->product_id);
+
             if (!empty($ProductData)) {
                 // Convert the schedule time to a timestamp (order creation time)
                 $scheduleTime = strtotime($request->schedule_time);
-                // Check if the order is for same emirates
-                if ($request->is_same_emirate) {
-                    // If the frequency is in days, add SLA days to the schedule time
-                    if ($ProductData->same_emirate_frequency == 'days') {
-                        $estimated_time = strtotime("+{$ProductData->sla_same_emirates} days", $scheduleTime);
-                        // Set time to 8 PM only if the frequency is 'days'
-                        $final_estimated_time = date('Y-m-d 20:00:00', $estimated_time);
-                        $estimated_time = strtotime($final_estimated_time); // Recalculate as timestamp
-                    }
-                    // If the frequency is in hours, add SLA hours to the schedule time
-                    else if ($ProductData->same_emirate_frequency == 'hours') {
-                        $estimated_time = strtotime("+{$ProductData->sla_same_emirates} hours", $scheduleTime);
-                    }
-                }
-                // If the order is for different emirates
-                else {
-                    // If the frequency is in days, add SLA days to the schedule time
-                    if ($ProductData->diff_emirate_frequency == 'days') {
-                        $estimated_time = strtotime("+{$ProductData->sla_diff_emirates} days", $scheduleTime);
-                        // Set time to 8 PM only if the frequency is 'days'
-                        $final_estimated_time = date('Y-m-d 20:00:00', $estimated_time);
-                        $estimated_time = strtotime($final_estimated_time); // Recalculate as timestamp
-                    }
-                    // If the frequency is in hours, add SLA hours to the schedule time
-                    else if ($ProductData->diff_emirate_frequency == 'hours') {
-                        $estimated_time = strtotime("+{$ProductData->sla_diff_emirates} hours", $scheduleTime);
+
+                if ($scheduleTime === false) {
+                    $estimated_time = null;
+                } else {
+                    // Check if the order is for same emirates
+                    if ($request->is_same_emirate) {
+                        $estimated_time = null;
+
+                        // here we are getting the distance sla group id 
+                        // if its being configured in the settings and not set for the product we took the default group id 
+                        $resolvedDistanceSlaGroupId = $this->resolveDistanceSlaGroupId(
+                            $ProductData->distance_sla_group_id,
+                            (bool) ($client_preference->use_distance_based_sla ?? false)
+                        );
+
+                        if ($resolvedDistanceSlaGroupId !== null) {
+                            $estimated_time = $this->computeDistanceBasedSla(
+                                $request->tasks ?? [],
+                                $resolvedDistanceSlaGroupId,
+                                (int) $scheduleTime,
+                                $riderWaitingTime
+                            );
+                        } else {
+                            $estimated_time = $this->computeLegacySameEmirateSla(
+                                (int) $scheduleTime,
+                                (int) $ProductData->sla_same_emirates,
+                                (string) ($ProductData->same_emirate_frequency ?? '')
+                            );
+                        }
+                    } else { // If the order is for different emirates
+
+                        // If the frequency is in days, add SLA days to the schedule time
+                        if ($ProductData->diff_emirate_frequency == 'days') {
+                            $estimated_time = strtotime("+{$ProductData->sla_diff_emirates} days", $scheduleTime);
+                            // Set time to 8 PM only if the frequency is 'days'
+                            $final_estimated_time = date('Y-m-d 20:00:00', $estimated_time);
+                            $estimated_time = strtotime($final_estimated_time); // Recalculate as timestamp
+                        }
+                        // If the frequency is in hours, add SLA hours to the schedule time
+                        else if ($ProductData->diff_emirate_frequency == 'hours') {
+                            $estimated_time = strtotime("+{$ProductData->sla_diff_emirates} hours", $scheduleTime);
+                        }
                     }
                 }
 
@@ -1247,6 +1376,9 @@ class PickupDeliveryController extends BaseController
                     $estimated_time = null; // Handle as needed if calculation failed
                 }
             }
+            $distanceSLAGroupId = (!empty($ProductData) && $resolvedDistanceSlaGroupId !== null)
+                ? $resolvedDistanceSlaGroupId
+                : null;
 
             $deliveryCart = DeliveryCart::updateOrCreate(
                 [
@@ -1254,22 +1386,23 @@ class PickupDeliveryController extends BaseController
                     'status'  => 'pending',
                 ],
                 [
-                    'vendor_id'         => $request->vendor_id,
-                    'product_id'        => $request->product_id,
-                    'currency_id'       => $request->currency_id,
-                    'is_same_emirate'   => $request->is_same_emirate,
-                    'payment_option_id' => $request->payment_option_id,
-                    'amount'            => $request->amount, //servicefee + tax
-                    'recipient_phone'   => $request->recipient_phone,
-                    'recipient_email'   => $request->recipient_email,
-                    'schedule_time'     => date('Y-m-d H:i:s', strtotime($request->schedule_time)),
-                    'task_type'         => $request->task_type,
-                    'category_id'       => $request->category_id,
-                    'client_comment'    => $request->client_comment,
-                    'vehicle_number'    => $request->vehicle_number,
-                    'coupon_id'         => $request->coupon_id ?? NULL,
-                    'estimated_time'    => $estimated_time,
-                    'item_cat_id'       => $request->item_cat_id ?? 0,
+                    'vendor_id'             => $request->vendor_id,
+                    'product_id'            => $request->product_id,
+                    'currency_id'           => $request->currency_id,
+                    'is_same_emirate'       => $request->is_same_emirate,
+                    'payment_option_id'     => $request->payment_option_id,
+                    'amount'                => $request->amount, //servicefee + tax
+                    'recipient_phone'       => $request->recipient_phone,
+                    'recipient_email'       => $request->recipient_email,
+                    'schedule_time'         => date('Y-m-d H:i:s', strtotime($request->schedule_time)),
+                    'task_type'             => $request->task_type,
+                    'category_id'           => $request->category_id,
+                    'client_comment'        => $request->client_comment,
+                    'vehicle_number'        => $request->vehicle_number,
+                    'coupon_id'             => $request->coupon_id ?? NULL,
+                    'distance_sla_group_id' => $distanceSLAGroupId,
+                    'estimated_time'        => $estimated_time,
+                    'item_cat_id'           => $request->item_cat_id ?? 0,
                 ]
             );
 
@@ -1300,9 +1433,11 @@ class PickupDeliveryController extends BaseController
                     ]
                 );
             }
+
             $deliveryCart = DeliveryCart::with(['tasks', 'coupon', 'product.taxCategory.taxRate'])
                 ->where('id', $deliveryCart->id)
                 ->first();
+
             $couponDiscount = 0;
             if ($deliveryCart->coupon_id != NULL) {
                 $promoCode = Promocode::where('id', $deliveryCart->coupon_id)->first();
@@ -1325,10 +1460,13 @@ class PickupDeliveryController extends BaseController
             }
             $tax = 0;
             if ($deliveryCart->product->taxCategory != null) {
-                $rate = round($deliveryCart->product->taxCategory->taxRate[0]->tax_rate);
-                $tax = ($newAmount * $rate) / 100;
+                $taxRate = optional($deliveryCart->product->taxCategory)->taxRate?->first();
+                $rate = $taxRate ? round($taxRate->tax_rate) : 0;
+                $tax  = ($newAmount * $rate) / 100;
             }
+
             $grandTotal = $newAmount + $tax;
+
             if (!empty($deliveryCart->estimated_time)) {
                 $estimatedAt = Carbon::parse($deliveryCart->estimated_time)->locale(app()->getLocale());
                 $timeFormatted = $estimatedAt->translatedFormat('g:i A');
@@ -1347,15 +1485,6 @@ class PickupDeliveryController extends BaseController
             $deliveryCart['tax']            = round(max($tax, 0), 2);
             $deliveryCart['grandTotal']     = round(max($grandTotal, 0), 2);
 
-            // Get rider waiting time (ETA to reach pickup) from dispatcher using pickup location
-            $riderWaitingTime = null;
-            if (!empty($request->tasks[0]['latitude']) && !empty($request->tasks[0]['longitude'])) {
-                $riderWaitingTime = $this->getRiderWaitingTimeFromDispatcher(
-                    $request->tasks[0]['latitude'],
-                    $request->tasks[0]['longitude'],
-                    $request->vendor_id
-                );
-            }
             // Add rider ETA details to response
             $deliveryCart['rider_waiting_time_minutes'] = $riderWaitingTime['waiting_time_minutes'] ?? null;
             $deliveryCart['zone_name'] = $riderWaitingTime['zone_name'] ?? null;
@@ -1392,10 +1521,10 @@ class PickupDeliveryController extends BaseController
         try {
             // Get existing images before deletion to remove files from S3
             $existingImages = DeliveryCartImage::where('delivery_cart_id', $request->delivery_cart_id)->get();
-            
+
             // Delete all existing images for this cart ID
             DeliveryCartImage::where('delivery_cart_id', $request->delivery_cart_id)->delete();
-            
+
             // Delete orphaned image files from S3
             foreach ($existingImages as $existingImage) {
                 try {
@@ -1403,7 +1532,7 @@ class PickupDeliveryController extends BaseController
                     $imageUrl = $existingImage->image_path;
                     $pathParts = parse_url($imageUrl);
                     $s3Path = '';
-                    
+
                     // Extract the path after the domain
                     if (isset($pathParts['path'])) {
                         // Remove leading slash and get the path relative to S3 bucket
@@ -1418,12 +1547,12 @@ class PickupDeliveryController extends BaseController
                     Log::warning('Failed to delete S3 image: ' . $e->getMessage());
                 }
             }
-            
+
             if ($request->hasFile('images')) {
                 foreach ($request->file('images') as $image) {
                     $filename = uniqid('cart_') . '.' . $image->getClientOriginalExtension();
                     $path = '';
-                    
+
                     // Check if image size is greater than 2MB (2 * 1024 * 1024 bytes)
                     if ($image->getSize() > 2 * 1024 * 1024) {
                         // Compress and resize large images
@@ -1434,7 +1563,7 @@ class PickupDeliveryController extends BaseController
                                 $constraint->upsize();
                             })
                             ->encode('jpg', 80); // 80% quality for good compression
-                        
+
                         // Save compressed image to S3
                         $path = 'delivery_cart_images/' . $filename;
                         Storage::disk('s3')->put($path, $compressedImage->stream());
@@ -1682,16 +1811,16 @@ class PickupDeliveryController extends BaseController
                     }
                     $clientOrderController = new ClientOrderController();
                     $clientOrderController->sendRejectOrderMail($orderId, 'cancelled');
-                    
+
                     // Send push notification to customer
                     if ($order && $order->user_id) {
                         //sendStatusChangePushNotificationCustomer([$order->user_id], $order, 3, $order->vendor_id);
-                        
+
                         // Send push notification for order cancellation with 5 seconds delay using queue
                         dispatch(new \App\Jobs\SendPushNotificationJob([$order->user_id], $order->id, $order->order_number, 3, $order->vendor_id))
                             ->delay(now()->addSeconds(5))->onConnection('database');
                     }
-                    
+
                     return response()->json(['message' => __('Order cancelled successfully.')], 200);
                 } elseif ($res->getStatusCode() == 400) {
 
