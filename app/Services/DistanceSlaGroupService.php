@@ -74,21 +74,29 @@ class DistanceSlaGroupService
         });
     }
 
+    /**
+     * Persist rules for a group. The last submitted rule is treated as open-ended
+     * and is always stored with `distance_to = NULL` so runtime matching can
+     * recognize it without any schema change.
+     */
     private function syncRules(DistanceSlaGroup $group, array $rules): void
     {
         $now = now();
         $rows = [];
 
-        foreach ($rules as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
+        $rules = array_values(array_filter($rules, 'is_array'));
+        $lastIdx = count($rules) - 1;
+
+        foreach ($rules as $idx => $row) {
+            $isLast = ($idx === $lastIdx);
+            $distanceTo = $isLast ? null : $this->numericOrNull($row['distance_to'] ?? null);
+
             $rows[] = [
                 'distance_sla_group_id' => $group->id,
-                'distance_from'         => $row['distance_from'],
-                'distance_to'           => $row['distance_to'],
-                'time_with_rider'       => $row['time_with_rider'],
-                'time_without_rider'    => $row['time_without_rider'],
+                'distance_from'         => $this->numericOrNull($row['distance_from'] ?? null),
+                'distance_to'           => $distanceTo,
+                'time_with_rider'       => (int) ($row['time_with_rider'] ?? 0),
+                'time_without_rider'    => (int) ($row['time_without_rider'] ?? 0),
                 'created_at'            => $now,
                 'updated_at'            => $now,
             ];
@@ -97,5 +105,17 @@ class DistanceSlaGroupService
         if (count($rows) > 0) {
             DistanceSlaRule::insert($rows);
         }
+    }
+
+    private function numericOrNull($value): ?float
+    {
+        if ($value === null || $value === '' || (is_string($value) && trim($value) === '')) {
+            return null;
+        }
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        return (float) $value;
     }
 }

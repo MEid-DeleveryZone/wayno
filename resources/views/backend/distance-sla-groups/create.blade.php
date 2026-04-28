@@ -59,6 +59,44 @@
 @section('script')
 <script>
 (function() {
+    var OPEN_ENDED_PLACEHOLDER = '{{ __('No upper limit') }}';
+
+    function applyOpenEndedLastRow() {
+        var $rows = $('#rules-tbody tr.rule-row');
+        if ($rows.length === 0) return;
+        $rows.each(function(i) {
+            var $row = $(this);
+            var $to = $row.find('input.rule-distance-to');
+            var $hint = $row.find('.rule-open-ended-hint');
+            var isLast = (i === $rows.length - 1);
+            if (isLast) {
+                var current = $to.val();
+                if (current !== '' && current !== null && typeof current !== 'undefined') {
+                    $to.attr('data-saved-to', current);
+                }
+                $to.val('');
+                $to.prop('readonly', true);
+                $to.removeAttr('required');
+                $to.attr('placeholder', OPEN_ENDED_PLACEHOLDER);
+                $to.addClass('bg-light');
+                $row.addClass('rule-row-open-ended');
+                $hint.show();
+            } else {
+                var saved = $to.attr('data-saved-to');
+                if (saved && $to.val() === '') {
+                    $to.val(saved);
+                }
+                $to.removeAttr('data-saved-to');
+                $to.prop('readonly', false);
+                $to.attr('required', 'required');
+                $to.attr('placeholder', '');
+                $to.removeClass('bg-light');
+                $row.removeClass('rule-row-open-ended');
+                $hint.hide();
+            }
+        });
+    }
+
     function reindexRules() {
         $('#rules-tbody tr.rule-row').each(function(i) {
             $(this).find('input').each(function() {
@@ -68,11 +106,15 @@
                 }
             });
         });
+        applyOpenEndedLastRow();
     }
+
     $('#add-rule-row').on('click', function() {
         var $first = $('#rules-tbody tr.rule-row').first();
         var $clone = $first.clone();
         $clone.find('input').val('');
+        $clone.find('input.rule-distance-to').removeAttr('data-saved-to');
+        $clone.removeClass('rule-row-open-ended');
         $('#rules-tbody').append($clone);
         reindexRules();
     });
@@ -88,6 +130,8 @@
         $(this).closest('tr').remove();
         reindexRules();
     });
+
+    applyOpenEndedLastRow();
 
     (function slaDefaultBanner() {
         var $cb = $('#is_default');

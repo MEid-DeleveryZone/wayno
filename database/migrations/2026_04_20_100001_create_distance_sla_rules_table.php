@@ -17,7 +17,7 @@ class CreateDistanceSlaRulesTable extends Migration
             $table->id();
             $table->unsignedBigInteger('distance_sla_group_id');
             $table->decimal('distance_from', 8, 2);
-            $table->decimal('distance_to', 8, 2);
+            $table->decimal('distance_to', 8, 2)->nullable();
             $table->unsignedInteger('time_with_rider');
             $table->unsignedInteger('time_without_rider');
             $table->timestamps();

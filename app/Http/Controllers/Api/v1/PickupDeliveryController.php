@@ -1254,10 +1254,15 @@ class PickupDeliveryController extends BaseController
 
         $canUseDistanceRule = $distanceKm > 0 && $isPickupEnabled && $isDropoffEnabled;
 
+        // Match the most specific band: bounded rows match `distance_from <= d <= distance_to`,
         $rule = $canUseDistanceRule
             ? DistanceSlaRule::where('distance_sla_group_id', $groupId)
             ->where('distance_from', '<=', $distanceKm)
-            ->where('distance_to', '>=', $distanceKm)
+            ->where(function ($q) use ($distanceKm) {
+                $q->whereNull('distance_to')
+                    ->orWhere('distance_to', '>=', $distanceKm);
+            })
+            ->orderByDesc('distance_from')
             ->first()
             : null;
 

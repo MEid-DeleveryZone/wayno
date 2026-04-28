@@ -34,6 +34,7 @@
                 } else {
                     $ruleRows[] = [];
                 }
+                $lastIdx = count($ruleRows) - 1;
             @endphp
             @foreach ($ruleRows as $idx => $r)
                 @php
@@ -41,18 +42,26 @@
                     $dt = $r['distance_to'] ?? '';
                     $tw = $r['time_with_rider'] ?? '';
                     $twr = $r['time_without_rider'] ?? '';
+                    $isLast = ($idx === $lastIdx);
                 @endphp
-                <tr class="rule-row">
+                <tr class="rule-row{{ $isLast ? ' rule-row-open-ended' : '' }}">
                     <td>
                         <input type="number" step="0.01" class="form-control @error('rules.'.$idx.'.distance_from') is-invalid @enderror"
-                            name="rules[{{ $idx }}][distance_from]" value="{{ $df }}" required>
+                            name="rules[{{ $idx }}][distance_from]" value="{{ $df }}" required min="0">
                         @error('rules.'.$idx.'.distance_from')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
                     </td>
                     <td>
-                        <input type="number" step="0.01" class="form-control @error('rules.'.$idx.'.distance_to') is-invalid @enderror"
-                            name="rules[{{ $idx }}][distance_to]" value="{{ $dt }}" required>
+                        <input type="number" step="0.01"
+                            class="form-control rule-distance-to @error('rules.'.$idx.'.distance_to') is-invalid @enderror{{ $isLast ? ' bg-light' : '' }}"
+                            name="rules[{{ $idx }}][distance_to]"
+                            value="{{ $isLast ? '' : $dt }}"
+                            placeholder="{{ $isLast ? __('No upper limit') : '' }}"
+                            @if($isLast) readonly data-saved-to="{{ $dt }}" @else required @endif>
+                        <small class="form-text text-muted rule-open-ended-hint" @if(!$isLast) style="display:none" @endif>
+                            {{ __('Last band has no upper limit.') }}
+                        </small>
                         @error('rules.'.$idx.'.distance_to')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
@@ -79,6 +88,9 @@
     </table>
 </div>
 <button type="button" class="btn btn-secondary btn-sm" id="add-rule-row">{{ __('Add rule') }}</button>
+<small class="form-text text-muted mt-2 mb-0">
+    {{ __('The last band is open-ended and matches every distance greater than or equal to its “Distance from”. New bands are always appended after the last one.') }}
+</small>
 @if($errors->has('rules'))
     <div class="alert alert-danger border-0 shadow-sm mt-3 mb-0" role="alert">
         <div class="d-flex align-items-start">
