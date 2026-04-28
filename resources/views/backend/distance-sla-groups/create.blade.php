@@ -66,7 +66,6 @@
 
     // Keep the hidden name-bearing inputs in sync with the visible generator inputs.
     function syncHidden() {
-        $('#gen-initial-hidden').val($('#gen-initial').val());
         $('#gen-step-hidden').val($('#gen-step').val());
         $('#gen-threshold-hidden').val($('#gen-threshold').val());
     }
@@ -147,12 +146,12 @@
 
     /** Rebuild the rules table from the current generator inputs. */
     function rebuildTable() {
-        var initial   = $('#gen-initial').val();
+        var initial   = 0;
         var step      = $('#gen-step').val();
         var threshold = $('#gen-threshold').val();
         syncHidden();
 
-        if (initial === '' || step === '' || threshold === '') {
+        if (step === '' || threshold === '') {
             $('#rules-tbody').html(
                 '<tr id="gen-placeholder-row">' +
                 '<td colspan="4" class="text-center text-muted small py-3">' + PLACEHOLDER_MSG + '</td>' +
@@ -179,13 +178,13 @@
     }
 
     // React to changes in the generator inputs.
-    $('#gen-initial, #gen-step, #gen-threshold').on('input', function() {
+    $('#gen-step, #gen-threshold').on('input', function() {
         rebuildTable();
     });
 
-    // On page load: auto-trigger when all three params are already set
+    // On page load: auto-trigger when both params are already set
     // (happens after a failed form submission restores old values).
-    if ($('#gen-initial').val() !== '' && $('#gen-step').val() !== '' && $('#gen-threshold').val() !== '') {
+    if ($('#gen-step').val() !== '' && $('#gen-threshold').val() !== '') {
         rebuildTable();
     }
 

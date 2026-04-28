@@ -32,17 +32,10 @@
 <div class="card border mb-3">
     <div class="card-body py-3">
         <p class="mb-2 font-weight-medium text-muted small text-uppercase" style="letter-spacing:.04em">{{ __('Auto-generate distance bands') }}</p>
+        {{-- Initial distance is always 1 km; no user input needed. --}}
+        <input type="hidden" name="generator_initial" id="gen-initial-hidden" value="0">
         <div class="form-row align-items-end">
-            <div class="col-md-4 form-group mb-md-0">
-                <label class="small mb-1" for="gen-initial">{{ __('Initial Distance (km)') }}</label>
-                <input type="number" step="1" min="1" id="gen-initial"
-                       class="form-control"
-                       value="{{ old('generator_initial', '') }}"
-                       placeholder="{{ __('e.g. 5') }}">
-                <input type="hidden" name="generator_initial" id="gen-initial-hidden"
-                       value="{{ old('generator_initial', '') }}">
-            </div>
-            <div class="col-md-4 form-group mb-md-0">
+            <div class="col-md-6 form-group mb-md-0">
                 <label class="small mb-1" for="gen-threshold">{{ __('Final Threshold (km)') }}</label>
                 <input type="number" step="1" min="1" id="gen-threshold"
                        class="form-control"
@@ -51,7 +44,7 @@
                 <input type="hidden" name="generator_threshold" id="gen-threshold-hidden"
                        value="{{ old('generator_threshold', '') }}">
             </div>
-            <div class="col-md-4 form-group mb-md-0">
+            <div class="col-md-6 form-group mb-md-0">
                 <label class="small mb-1" for="gen-step">{{ __('Increment Step (km)') }}</label>
                 <input type="number" step="1" min="1" id="gen-step"
                        class="form-control"
