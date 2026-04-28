@@ -81,14 +81,14 @@
         </div>
         <div id="sidebar-menu">
             <?php
-            $allowed = [];
-            if (Auth::user()->is_superadmin == 0) {
-                foreach (Auth::user()->getAllPermissions as $value) {
-                    array_push($allowed, $value->permission->slug);
-                }
-            } else {
-                array_push($allowed, '99999');
-            }
+$allowed = [];
+if (Auth::user()->is_superadmin == 0) {
+    foreach (Auth::user()->getAllPermissions as $value) {
+        array_push($allowed, $value->permission->slug);
+    }
+} else {
+    array_push($allowed, '99999');
+}
             ?>
             <ul id="side-menu">
                 @php
@@ -151,17 +151,15 @@
                                                         $loyaltyCards = getNomenclatureName('Loyalty Cards', true);
                                                         $loyaltyCardsLabel =
                                                             $loyaltyCards == 'Loyalty Cards'
-                                                                ? __('Loyalty Cards')
-                                                                : $loyaltyCards;
+                                                            ? __('Loyalty Cards')
+                                                            : $loyaltyCards;
                                                     @endphp
-                                                    <a
-                                                        href="{{ route('account.loyalty') }}">{{ $loyaltyCardsLabel }}</a>
+                                                    <a href="{{ route('account.loyalty') }}">{{ $loyaltyCardsLabel }}</a>
                                                 </li>
                                             @endif
                                             @if (in_array('accounting_promo_codes', $allowed) || Auth::user()->is_superadmin == 1)
                                                 <li>
-                                                    <a
-                                                        href="{{ route('account.promo.code') }}">{{ __('Promo Codes') }}</a>
+                                                    <a href="{{ route('account.promo.code') }}">{{ __('Promo Codes') }}</a>
                                                 </li>
                                             @endif
                                             @if (in_array('accounting_taxes', $allowed) || Auth::user()->is_superadmin == 1)
@@ -184,7 +182,8 @@
                                 </li>
                             @endif
                             @if (Auth::user()->is_superadmin == 1)
-                                {{-- @if (count(array_intersect($subscription_permissions, $allowed)) || Auth::user()->is_superadmin == 1) --}}
+                                {{-- @if (count(array_intersect($subscription_permissions, $allowed)) ||
+                                Auth::user()->is_superadmin == 1) --}}
                                 @if ($client_preference->subscription_mode == 1)
                                     <li>
                                         <a href="#sidebarsubscriptions" data-toggle="collapse">
@@ -195,14 +194,12 @@
                                             <ul class="nav-second-level">
                                                 @if (in_array('subscription_plans_customers', $allowed) || Auth::user()->is_superadmin == 1)
                                                     <li>
-                                                        <a
-                                                            href="{{ route('subscription.plans.user') }}">{{ __('Customers') }}</a>
+                                                        <a href="{{ route('subscription.plans.user') }}">{{ __('Customers') }}</a>
                                                     </li>
                                                 @endif
                                                 @if (in_array('subscription_plans_vendors', $allowed) || Auth::user()->is_superadmin == 1)
                                                     <li>
-                                                        <a
-                                                            href="{{ route('subscription.plans.vendor') }}">{{ $VendorsTrans }}</a>
+                                                        <a href="{{ route('subscription.plans.vendor') }}">{{ $VendorsTrans }}</a>
                                                     </li>
                                                 @endif
                                             </ul>
@@ -223,7 +220,8 @@
                     </li>
                 @endif
                 @if (Auth::user()->is_superadmin == 1)
-                    {{-- @if (count(array_intersect($setting_permissions, $allowed)) || Auth::user()->is_superadmin == 1) --}}
+                    {{-- @if (count(array_intersect($setting_permissions, $allowed)) || Auth::user()->is_superadmin == 1)
+                    --}}
                     <li>
                         <a class="menu-title pl-1" href="#">
                             <!-- <span class="icon-settings-1-1"></span> -->
@@ -256,14 +254,12 @@
                                         <ul class="nav-second-level">
                                             @if (in_array('app_styling', $allowed) || Auth::user()->is_superadmin == 1)
                                                 <li>
-                                                    <a
-                                                        href="{{ route('appStyling.index') }}">{{ __('App Styling') }}</a>
+                                                    <a href="{{ route('appStyling.index') }}">{{ __('App Styling') }}</a>
                                                 </li>
                                             @endif
                                             @if (in_array('web_styling', $allowed) || Auth::user()->is_superadmin == 1)
                                                 <li>
-                                                    <a
-                                                        href="{{ route('webStyling.index') }}">{{ __('Web Styling') }}</a>
+                                                    <a href="{{ route('webStyling.index') }}">{{ __('Web Styling') }}</a>
                                                 </li>
                                             @endif
                                         </ul>
@@ -289,8 +285,7 @@
                                         @endif
                                         @if (in_array('cms_notifications', $allowed) || Auth::user()->is_superadmin == 1)
                                             <li>
-                                                <a
-                                                    href="{{ route('cms.notifications') }}">{{ __('Notifications') }}</a>
+                                                <a href="{{ route('cms.notifications') }}">{{ __('Notifications') }}</a>
                                             </li>
                                         @endif
                                     </ul>
@@ -301,6 +296,12 @@
                                     <a href="{{ route('category.index') }}">
                                         <span class="icon-catalogue"></span>
                                         <span> {{ __('Catalog') }}</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ route('distance-sla-groups.index') }}">
+                                        <span class="icon-configuration"></span>
+                                        <span> {{ __('SLA Distance Configurations') }}</span>
                                     </a>
                                 </li>
                             @endif
@@ -353,8 +354,7 @@
                                                 </li>
                                             @endif
                                             <li>
-                                                <a
-                                                    href="{{ route('mobilebanner.index') }}">{{ __('Mobile Banner') }}</a>
+                                                <a href="{{ route('mobilebanner.index') }}">{{ __('Mobile Banner') }}</a>
                                             </li>
                                         </ul>
                                     </div>

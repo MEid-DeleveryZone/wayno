@@ -206,6 +206,9 @@ Route::group(['middleware' => 'adminLanguageSwitch'], function () {
         Route::post('product/variantRows', 'Client\ProductController@makeVariantRows')->name('product.makeRows');
         Route::post('product/variantImage/update', 'Client\ProductController@updateVariantImage')->name('product.variant.update');
         Route::get('product/image/delete/{pid}/{id}', 'Client\ProductController@deleteImage')->name('product.deleteImg');
+        Route::get('distance-sla-groups/search', 'Client\DistanceSlaGroupController@search')->name('distance-sla-groups.search');
+        Route::post('distance-sla-groups/{distance_sla_group}/set-default', 'Client\DistanceSlaGroupController@setDefault')->name('distance-sla-groups.set-default');
+        Route::resource('distance-sla-groups', 'Client\DistanceSlaGroupController');
         Route::resource('loyalty', 'Client\LoyaltyController');
         Route::post('loyalty/changeStatus', 'Client\LoyaltyController@changeStatus')->name('loyalty.changeStatus');
         Route::post('loyalty/getRedeemPoints', 'Client\LoyaltyController@getRedeemPoints')->name('loyalty.getRedeemPoints');

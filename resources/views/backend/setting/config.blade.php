@@ -925,6 +925,13 @@
                         <input type="checkbox" data-plugin="switchery" name="isolate_single_vendor_order" id="isolate_single_vendor_order" class="form-control" data-color="#43bee1" @if((isset($preference) && $preference->isolate_single_vendor_order == '1')) checked='checked' @endif>
                      </div>
                   </div>
+                  <div class="col-md-4">
+                     <div class="form-group mb-3">
+                        <label for="use_distance_based_sla" class="mr-2 mb-0">{{ __('Distance-based SLA (same emirate)') }}</label>
+                        <input type="checkbox" data-plugin="switchery" name="use_distance_based_sla" id="use_distance_based_sla" class="form-control" data-color="#43bee1" @if((isset($preference) && !empty($preference->use_distance_based_sla))) checked='checked' @endif>
+                        <small class="form-text text-muted">{{ __('When enabled, products use SLA distance groups for same-emirate delivery; numeric SLA-Same Emirates is hidden from use on the product form.') }}</small>
+                     </div>
+                  </div>
 
                   <div class="col-md-4">
                      <div class="form-group mb-3">
